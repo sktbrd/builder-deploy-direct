@@ -129,10 +129,12 @@ export async function createProject(
 
 export type TriggerDeploymentOpts = {
   projectName: string;
+  projectId?: string;
   ref?: string;
   repoId?: number;
   repo?: string;
   teamId?: string;
+  target?: "production" | "staging";
 };
 
 export async function triggerDeployment(
@@ -144,15 +146,24 @@ export async function triggerDeployment(
     ref: opts.ref ?? "main",
   };
   if (opts.repoId) gitSource.repoId = opts.repoId;
-  else if (opts.repo) gitSource.repo = opts.repo;
+  if (opts.repo) {
+    const [org, name] = opts.repo.split("/");
+    if (org && name) {
+      gitSource.org = org;
+      gitSource.repo = name;
+    }
+  }
+  const body: Record<string, unknown> = {
+    name: opts.projectName,
+    gitSource,
+    source: "import",
+  };
+  if (opts.projectId) body.project = opts.projectId;
+  if (opts.target) body.target = opts.target;
   return api<Deployment>("/v13/deployments", token, {
     method: "POST",
     teamId: opts.teamId,
-    body: JSON.stringify({
-      name: opts.projectName,
-      target: "production",
-      gitSource,
-    }),
+    body: JSON.stringify(body),
   });
 }
 

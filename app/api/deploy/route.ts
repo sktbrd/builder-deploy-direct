@@ -37,10 +37,12 @@ export async function POST(req: Request) {
     try {
       deployment = await triggerDeployment(session.token, {
         projectName: project.name,
+        projectId: project.id,
         repoId: repoId ?? project.link?.repoId,
         repo: config.githubRepo,
         ref: "main",
         teamId: session.teamId ?? undefined,
+        target: "production",
       });
     } catch (triggerErr) {
       // If trigger fails, fall back to polling the latest deployment in case
