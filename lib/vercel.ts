@@ -195,3 +195,21 @@ export const listGitNamespaces = (token: string, teamId?: string) =>
   api<GitNamespace[]>(`/v1/integrations/git-namespaces?host=github`, token, {
     teamId,
   });
+
+export async function projectExists(
+  token: string,
+  name: string,
+  teamId?: string,
+): Promise<boolean> {
+  try {
+    await api<{ id: string }>(
+      `/v9/projects/${encodeURIComponent(name)}`,
+      token,
+      { teamId },
+    );
+    return true;
+  } catch (e) {
+    if (e instanceof VercelApiError && e.status === 404) return false;
+    throw e;
+  }
+}

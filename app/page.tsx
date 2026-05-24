@@ -7,6 +7,7 @@ type ScreenId =
   | "welcome"
   | "vercel"
   | "github"
+  | "vercel-bridge"
   | "name"
   | "fork"
   | "chain"
@@ -21,6 +22,8 @@ type ScreenId =
   | "building"
   | "done"
   | "error";
+
+type NameStatus = "idle" | "checking" | "ok" | "taken" | "error";
 
 type Me = {
   vercel: { connected: boolean; username?: string; email?: string; teamId?: string | null };
@@ -52,6 +55,8 @@ export default function Home() {
   const [loadingMe, setLoadingMe] = useState(true);
 
   const [projectName, setProjectName] = useState("my-dao-site");
+  const [nameStatus, setNameStatus] = useState<NameStatus>("idle");
+  const [bridgeConfirmed, setBridgeConfirmed] = useState(false);
   const [forkedRepo, setForkedRepo] = useState<string>("");
   const [forkedRepoId, setForkedRepoId] = useState<number | undefined>();
   const [forking, setForking] = useState(false);
@@ -68,11 +73,12 @@ export default function Home() {
     const out: ScreenId[] = ["welcome"];
     if (!me?.vercel.connected) out.push("vercel");
     if (!me?.github.connected) out.push("github");
+    if (!bridgeConfirmed) out.push("vercel-bridge");
     out.push("name", "fork", "chain", "token", "walletconnect", "advanced-prompt");
     if (advanced) out.push("alchemy", "pinata-key", "pinata-gw", "site-url");
     out.push("review");
     return out;
-  }, [me, advanced]);
+  }, [me, advanced, bridgeConfirmed]);
 
   const idx = flow.indexOf(screen);
   const progress = idx >= 0 ? ((idx + 1) / flow.length) * 100 : 100;
@@ -91,13 +97,41 @@ export default function Home() {
       .then((r) => r.json())
       .then((data: Me) => {
         setMe(data);
-        // If already connected, skip past welcome / connect screens.
+        // If already connected, skip past welcome / connect screens to the
+        // bridge confirmation step (or name if bridge already confirmed).
         if (data.vercel.connected && data.github.connected) {
-          setScreen("name");
+          setScreen(bridgeConfirmed ? "name" : "vercel-bridge");
         }
       })
       .finally(() => setLoadingMe(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Debounced project name uniqueness check against Vercel.
+  useEffect(() => {
+    if (!me?.vercel.connected) return;
+    if (validateProjectName(projectName)) {
+      setNameStatus("idle");
+      return;
+    }
+    setNameStatus("checking");
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/vercel/check-name?name=${encodeURIComponent(projectName)}`,
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          setNameStatus("error");
+          return;
+        }
+        setNameStatus(data.available ? "ok" : "taken");
+      } catch {
+        setNameStatus("error");
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [projectName, me?.vercel.connected]);
 
   // Keyboard: Enter advances on most screens (only if current input is valid).
   useEffect(() => {
@@ -106,7 +140,7 @@ export default function Home() {
         const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
         if (tag === "textarea" || tag === "button") return;
         const blocked: Record<string, boolean> = {
-          name: !!validateProjectName(projectName),
+          name: !!validateProjectName(projectName) || nameStatus !== "ok",
           token: !!validateTokenAddress(env.NEXT_PUBLIC_DAO_TOKEN_ADDRESS),
           walletconnect: !env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID,
         };
@@ -127,7 +161,7 @@ export default function Home() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [screen, flow, projectName, env]);
+  }, [screen, flow, projectName, env, nameStatus]);
 
   const refreshMe = async () => {
     const res = await fetch("/api/me");
@@ -283,6 +317,15 @@ export default function Home() {
               hint="So we can fork the template into your account."
             />
           )}
+          {screen === "vercel-bridge" && (
+            <BridgeScreen
+              number={qn(flow, "vercel-bridge")}
+              onConfirm={() => {
+                setBridgeConfirmed(true);
+                setTimeout(() => setScreen("name"), 50);
+              }}
+            />
+          )}
           {screen === "name" && (
             <InputScreen
               number={qn(flow, "name")}
@@ -292,8 +335,20 @@ export default function Home() {
               onChange={(v) => setProjectName(v.toLowerCase())}
               placeholder="my-dao-site"
               onNext={next}
-              canNext={!validateProjectName(projectName)}
-              error={validateProjectName(projectName)}
+              canNext={
+                !validateProjectName(projectName) && nameStatus === "ok"
+              }
+              error={
+                validateProjectName(projectName) ??
+                (nameStatus === "taken"
+                  ? `"${projectName}" already exists on your Vercel account`
+                  : null)
+              }
+              statusBadge={
+                !validateProjectName(projectName) ? (
+                  <NameStatusBadge status={nameStatus} />
+                ) : null
+              }
             />
           )}
           {screen === "fork" && (
@@ -586,6 +641,7 @@ function InputScreen({
   optional,
   password,
   error,
+  statusBadge,
 }: {
   number: number;
   question: string;
@@ -598,6 +654,7 @@ function InputScreen({
   optional?: boolean;
   password?: boolean;
   error?: string | null;
+  statusBadge?: React.ReactNode;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [touched, setTouched] = useState(false);
@@ -609,20 +666,28 @@ function InputScreen({
   return (
     <div>
       <QuestionHeader number={number} title={question} hint={hint} />
-      <input
-        ref={ref}
-        type={password ? "password" : "text"}
-        className={[
-          bigInput,
-          showError ? "border-red-500/60 focus:border-red-400" : "",
-        ].join(" ")}
-        value={value}
-        onChange={(e) => {
-          setTouched(true);
-          onChange(e.target.value);
-        }}
-        placeholder={placeholder}
-      />
+      <div className="relative">
+        <input
+          ref={ref}
+          type={password ? "password" : "text"}
+          className={[
+            bigInput,
+            showError ? "border-red-500/60 focus:border-red-400" : "",
+            statusBadge ? "pr-12" : "",
+          ].join(" ")}
+          value={value}
+          onChange={(e) => {
+            setTouched(true);
+            onChange(e.target.value);
+          }}
+          placeholder={placeholder}
+        />
+        {statusBadge && (
+          <div className="absolute right-1 top-1/2 -translate-y-1/2">
+            {statusBadge}
+          </div>
+        )}
+      </div>
       {showError && (
         <div className="mt-2 text-xs text-red-400">{error}</div>
       )}
@@ -642,6 +707,86 @@ function InputScreen({
           press <Kbd>Enter</Kbd>
         </span>
       </div>
+    </div>
+  );
+}
+
+function NameStatusBadge({ status }: { status: NameStatus }) {
+  if (status === "checking")
+    return (
+      <span className="flex items-center gap-2 rounded-md bg-white/5 px-2 py-1 text-xs text-neutral-400">
+        <Spinner /> Checking…
+      </span>
+    );
+  if (status === "ok")
+    return (
+      <span className="flex items-center gap-1 rounded-md bg-emerald-500/15 px-2 py-1 text-xs text-emerald-400">
+        ✓ Available
+      </span>
+    );
+  if (status === "taken")
+    return (
+      <span className="flex items-center gap-1 rounded-md bg-red-500/15 px-2 py-1 text-xs text-red-400">
+        × Taken
+      </span>
+    );
+  return null;
+}
+
+function BridgeScreen({
+  number,
+  onConfirm,
+}: {
+  number: number;
+  onConfirm: () => void;
+}) {
+  const [opened, setOpened] = useState(false);
+  return (
+    <div>
+      <QuestionHeader
+        number={number}
+        title="Let Vercel see your GitHub"
+        hint="Vercel needs to read your forked repo to build it. This is a one-time setup."
+      />
+      <a
+        href="https://github.com/apps/vercel/installations/new"
+        target="_blank"
+        rel="noreferrer"
+        onClick={() => setOpened(true)}
+        className="group flex items-center justify-between rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.06] to-white/[0.02] p-6 transition-all hover:border-white/20 hover:from-white/[0.08]"
+      >
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10">
+            <VercelMark />
+          </div>
+          <div className="text-left">
+            <div className="text-lg font-semibold">Install Vercel on GitHub</div>
+            <div className="text-xs text-neutral-500">
+              Opens in a new tab. Pick the account or org with your fork.
+            </div>
+          </div>
+        </div>
+        <span className="text-2xl text-neutral-500 transition-transform group-hover:translate-x-1 group-hover:text-white">
+          ↗
+        </span>
+      </a>
+      <div className="mt-6 flex items-center gap-4">
+        <button onClick={onConfirm} className={ok}>
+          I&apos;ve installed it →
+        </button>
+        <button
+          onClick={onConfirm}
+          className="text-sm text-neutral-500 hover:text-white"
+        >
+          Already done, skip
+        </button>
+      </div>
+      {opened && (
+        <div className="mt-4 text-xs text-neutral-500">
+          Once you&apos;ve installed it on GitHub, come back here and click
+          &ldquo;I&apos;ve installed it&rdquo;.
+        </div>
+      )}
     </div>
   );
 }
