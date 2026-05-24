@@ -99,12 +99,17 @@ export default function Home() {
       .finally(() => setLoadingMe(false));
   }, []);
 
-  // Keyboard: Enter advances on most screens.
+  // Keyboard: Enter advances on most screens (only if current input is valid).
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Enter" && !e.shiftKey) {
         const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
         if (tag === "textarea" || tag === "button") return;
+        const blocked: Record<string, boolean> = {
+          name: !!validateProjectName(projectName),
+          token: !!validateTokenAddress(env.NEXT_PUBLIC_DAO_TOKEN_ADDRESS),
+          walletconnect: !env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID,
+        };
         const advancable = [
           "name",
           "token",
@@ -114,7 +119,7 @@ export default function Home() {
           "pinata-gw",
           "site-url",
         ];
-        if (advancable.includes(screen)) {
+        if (advancable.includes(screen) && !blocked[screen]) {
           e.preventDefault();
           next();
         }
@@ -122,7 +127,7 @@ export default function Home() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [screen, flow]);
+  }, [screen, flow, projectName, env]);
 
   const refreshMe = async () => {
     const res = await fetch("/api/me");
@@ -282,12 +287,13 @@ export default function Home() {
             <InputScreen
               number={qn(flow, "name")}
               question="Name your DAO site"
-              hint="Lowercase, dashes only. Becomes your-name.vercel.app."
+              hint="Lowercase letters, digits, '.', '_', '-'. Becomes your-name.vercel.app."
               value={projectName}
-              onChange={setProjectName}
+              onChange={(v) => setProjectName(v.toLowerCase())}
               placeholder="my-dao-site"
               onNext={next}
-              canNext={Boolean(projectName)}
+              canNext={!validateProjectName(projectName)}
+              error={validateProjectName(projectName)}
             />
           )}
           {screen === "fork" && (
@@ -323,7 +329,8 @@ export default function Home() {
               onChange={(v) => setEnvField("NEXT_PUBLIC_DAO_TOKEN_ADDRESS", v)}
               placeholder="0x…"
               onNext={next}
-              canNext={env.NEXT_PUBLIC_DAO_TOKEN_ADDRESS.startsWith("0x")}
+              canNext={!validateTokenAddress(env.NEXT_PUBLIC_DAO_TOKEN_ADDRESS)}
+              error={validateTokenAddress(env.NEXT_PUBLIC_DAO_TOKEN_ADDRESS)}
             />
           )}
           {screen === "walletconnect" && (
@@ -467,6 +474,25 @@ function qn(flow: ScreenId[], id: ScreenId): number {
   return flow.indexOf(id) + 1;
 }
 
+function validateProjectName(name: string): string | null {
+  if (!name) return "Required";
+  if (name.length > 100) return "Max 100 characters";
+  if (name !== name.toLowerCase()) return "Must be lowercase";
+  if (!/^[a-z0-9._-]+$/.test(name))
+    return "Only lowercase letters, digits, '.', '_', '-'";
+  if (name.includes("---")) return "Can't contain '---'";
+  if (/^[._-]/.test(name)) return "Can't start with '.', '_', or '-'";
+  if (/[._-]$/.test(name)) return "Can't end with '.', '_', or '-'";
+  return null;
+}
+
+function validateTokenAddress(addr: string): string | null {
+  if (!addr) return "Required";
+  if (!/^0x[a-fA-F0-9]{40}$/.test(addr))
+    return "Must be a 0x-prefixed 40-hex-character address";
+  return null;
+}
+
 function ScreenFrame({ children }: { children: React.ReactNode }) {
   return (
     <div className="w-full max-w-xl animate-[fadeIn_400ms_ease-out]">
@@ -559,6 +585,7 @@ function InputScreen({
   canNext,
   optional,
   password,
+  error,
 }: {
   number: number;
   question: string;
@@ -570,28 +597,44 @@ function InputScreen({
   canNext: boolean;
   optional?: boolean;
   password?: boolean;
+  error?: string | null;
 }) {
   const ref = useRef<HTMLInputElement>(null);
+  const [touched, setTouched] = useState(false);
   useEffect(() => {
     ref.current?.focus();
   }, []);
+  const showError = touched && error;
+  const disabled = optional ? false : !canNext;
   return (
     <div>
       <QuestionHeader number={number} title={question} hint={hint} />
       <input
         ref={ref}
         type={password ? "password" : "text"}
-        className={bigInput}
+        className={[
+          bigInput,
+          showError ? "border-red-500/60 focus:border-red-400" : "",
+        ].join(" ")}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          setTouched(true);
+          onChange(e.target.value);
+        }}
         placeholder={placeholder}
       />
+      {showError && (
+        <div className="mt-2 text-xs text-red-400">{error}</div>
+      )}
       <div className="mt-6 flex items-center gap-4">
-        <button onClick={onNext} disabled={!canNext && !optional} className={ok}>
+        <button onClick={onNext} disabled={disabled} className={ok}>
           OK <span className="opacity-60">↵</span>
         </button>
         {optional && (
-          <button onClick={onNext} className="text-sm text-neutral-500 hover:text-white">
+          <button
+            onClick={onNext}
+            className="text-sm text-neutral-500 hover:text-white"
+          >
             Skip
           </button>
         )}
