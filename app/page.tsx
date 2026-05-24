@@ -513,6 +513,11 @@ export default function Home() {
             <ErrorScreen
               error={error}
               bridgeHint={bridgeHint}
+              debugUrl={
+                projectName && forkedRepo
+                  ? `/api/debug?project=${encodeURIComponent(projectName)}&repo=${encodeURIComponent(forkedRepo)}${forkedRepoId ? `&repoId=${forkedRepoId}` : ""}`
+                  : null
+              }
               onRetry={() => {
                 setError(null);
                 setScreen("review");
@@ -1136,10 +1141,12 @@ function DoneScreen({
 function ErrorScreen({
   error,
   bridgeHint,
+  debugUrl,
   onRetry,
 }: {
   error: string | null;
   bridgeHint: string | null;
+  debugUrl: string | null;
   onRetry: () => void;
 }) {
   return (
@@ -1161,10 +1168,23 @@ function ErrorScreen({
           Install Vercel on GitHub →
         </a>
       )}
-      <div className="mt-4">
-        <button onClick={onRetry} className="text-sm text-neutral-400 hover:text-white">
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-xs">
+        <button
+          onClick={onRetry}
+          className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-neutral-300 hover:bg-white/10"
+        >
           ← Try again
         </button>
+        {debugUrl && (
+          <a
+            href={debugUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-neutral-300 hover:bg-white/10"
+          >
+            Open debug info ↗
+          </a>
+        )}
       </div>
     </div>
   );

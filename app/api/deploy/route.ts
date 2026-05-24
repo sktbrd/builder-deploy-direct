@@ -4,6 +4,7 @@ import {
   createProject,
   triggerDeployment,
   latestDeployment,
+  deleteProject,
   VercelApiError,
 } from "@/lib/vercel";
 import { readSession } from "@/lib/session";
@@ -24,15 +25,17 @@ export async function POST(req: Request) {
   if (!config) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
-  try {
-    const fullConfig: DeployConfig = {
-      ...config,
-      teamId: session.teamId ?? undefined,
-    };
-    const project = await createProject(session.token, fullConfig);
 
-    // POST /v11/projects only links the git repo; it doesn't always create
-    // an initial deployment. Trigger one explicitly so the first build runs.
+  const fullConfig: DeployConfig = {
+    ...config,
+    teamId: session.teamId ?? undefined,
+  };
+
+  let createdProjectId: string | null = null;
+  try {
+    const project = await createProject(session.token, fullConfig);
+    createdProjectId = project.id;
+
     let deployment;
     try {
       deployment = await triggerDeployment(session.token, {
@@ -45,8 +48,7 @@ export async function POST(req: Request) {
         target: "production",
       });
     } catch (triggerErr) {
-      // If trigger fails, fall back to polling the latest deployment in case
-      // Vercel kicked one off via webhook.
+      // Maybe webhook fired in the meantime — poll for an existing deployment.
       for (let i = 0; i < 10; i++) {
         deployment = await latestDeployment(
           session.token,
@@ -66,14 +68,29 @@ export async function POST(req: Request) {
       deployment,
     });
   } catch (e) {
+    // Roll back the orphaned project so the next attempt can reuse the name.
+    if (createdProjectId) {
+      try {
+        await deleteProject(
+          session.token,
+          createdProjectId,
+          session.teamId ?? undefined,
+        );
+      } catch {
+        // best-effort cleanup; ignore
+      }
+    }
     if (e instanceof VercelApiError) {
       return NextResponse.json(
-        { error: e.message, code: e.code },
+        { error: e.message, code: e.code, rolledBack: !!createdProjectId },
         { status: e.status },
       );
     }
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Unknown error" },
+      {
+        error: e instanceof Error ? e.message : "Unknown error",
+        rolledBack: !!createdProjectId,
+      },
       { status: 500 },
     );
   }

@@ -207,6 +207,17 @@ export const listGitNamespaces = (token: string, teamId?: string) =>
     teamId,
   });
 
+export async function deleteProject(
+  token: string,
+  idOrName: string,
+  teamId?: string,
+): Promise<void> {
+  await api<unknown>(`/v9/projects/${encodeURIComponent(idOrName)}`, token, {
+    method: "DELETE",
+    teamId,
+  });
+}
+
 export async function projectExists(
   token: string,
   name: string,
