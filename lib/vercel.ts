@@ -50,6 +50,43 @@ export type VercelTeam = { id: string; slug: string; name: string };
 export const listTeams = (token: string) =>
   api<{ teams: VercelTeam[] }>("/v2/teams", token);
 
+export type OauthTokenResponse = {
+  token_type: "Bearer";
+  access_token: string;
+  installation_id: string;
+  user_id: string;
+  team_id: string | null;
+};
+
+export async function exchangeCode(params: {
+  code: string;
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+}): Promise<OauthTokenResponse> {
+  const body = new URLSearchParams({
+    client_id: params.clientId,
+    client_secret: params.clientSecret,
+    code: params.code,
+    redirect_uri: params.redirectUri,
+  });
+  const res = await fetch(`${API}/v2/oauth/access_token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    const err = data.error as { code?: string; message?: string } | undefined;
+    throw new VercelApiError(
+      res.status,
+      err?.code,
+      err?.message ?? `Vercel OAuth ${res.status} ${res.statusText}`,
+    );
+  }
+  return data as OauthTokenResponse;
+}
+
 export function parseGithubRepo(input: string): string {
   const trimmed = input.trim().replace(/\/$/, "");
   const m = trimmed.match(/(?:github\.com[:/])?([\w.-]+\/[\w.-]+?)(?:\.git)?$/);
@@ -90,6 +127,35 @@ export async function createProject(
   });
 }
 
+export type TriggerDeploymentOpts = {
+  projectName: string;
+  ref?: string;
+  repoId?: number;
+  repo?: string;
+  teamId?: string;
+};
+
+export async function triggerDeployment(
+  token: string,
+  opts: TriggerDeploymentOpts,
+): Promise<Deployment> {
+  const gitSource: Record<string, unknown> = {
+    type: "github",
+    ref: opts.ref ?? "main",
+  };
+  if (opts.repoId) gitSource.repoId = opts.repoId;
+  else if (opts.repo) gitSource.repo = opts.repo;
+  return api<Deployment>("/v13/deployments", token, {
+    method: "POST",
+    teamId: opts.teamId,
+    body: JSON.stringify({
+      name: opts.projectName,
+      target: "production",
+      gitSource,
+    }),
+  });
+}
+
 export type Deployment = {
   uid: string;
   url: string;
@@ -118,3 +184,14 @@ export async function latestDeployment(
 
 export const getDeployment = (token: string, id: string, teamId?: string) =>
   api<Deployment>(`/v13/deployments/${id}`, token, { teamId });
+
+export type GitNamespace = {
+  id: string | number;
+  slug: string;
+  provider: string;
+};
+
+export const listGitNamespaces = (token: string, teamId?: string) =>
+  api<GitNamespace[]>(`/v1/integrations/git-namespaces?host=github`, token, {
+    teamId,
+  });

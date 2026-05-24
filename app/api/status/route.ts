@@ -1,19 +1,24 @@
 import { NextResponse } from "next/server";
 import { getDeployment, VercelApiError } from "@/lib/vercel";
+import { readSession } from "@/lib/session";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
-  const { token, deploymentId, teamId } = (await req.json()) as {
-    token?: string;
-    deploymentId?: string;
-    teamId?: string;
-  };
-  if (!token || !deploymentId) {
+  const session = await readSession();
+  if (!session) {
+    return NextResponse.json({ error: "Not connected" }, { status: 401 });
+  }
+  const { deploymentId } = (await req.json()) as { deploymentId?: string };
+  if (!deploymentId) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
   try {
-    const deployment = await getDeployment(token, deploymentId, teamId);
+    const deployment = await getDeployment(
+      session.token,
+      deploymentId,
+      session.teamId ?? undefined,
+    );
     return NextResponse.json({ deployment });
   } catch (e) {
     if (e instanceof VercelApiError) {
