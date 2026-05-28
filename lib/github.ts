@@ -102,3 +102,33 @@ export async function forkRepo(
 
 export const getRepo = (token: string, fullName: string) =>
   gh<GhRepo>(`/repos/${fullName}`, token);
+
+export async function commitFile(
+  token: string,
+  fullRepo: string,
+  path: string,
+  content: string,
+  message: string,
+  branch = "main",
+): Promise<void> {
+  let sha: string | undefined;
+  try {
+    const existing = await gh<{ sha: string }>(
+      `/repos/${fullRepo}/contents/${encodeURIComponent(path)}?ref=${branch}`,
+      token,
+    );
+    sha = existing.sha;
+  } catch (e) {
+    if (!(e instanceof GitHubApiError && e.status === 404)) throw e;
+  }
+  await gh(`/repos/${fullRepo}/contents/${encodeURIComponent(path)}`, token, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message,
+      content: Buffer.from(content).toString("base64"),
+      branch,
+      ...(sha ? { sha } : {}),
+    }),
+  });
+}

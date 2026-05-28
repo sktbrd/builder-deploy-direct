@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import type { DeployConfig } from "@/lib/config";
 import {
   createProject,
-  triggerDeployment,
   latestDeployment,
   deleteProject,
   VercelApiError,
 } from "@/lib/vercel";
-import { readSession } from "@/lib/session";
+import { commitFile, GitHubApiError } from "@/lib/github";
+import { readSession, readGhSession } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -18,10 +18,17 @@ type Body = {
 
 export async function POST(req: Request) {
   const session = await readSession();
+  const gh = await readGhSession();
   if (!session) {
     return NextResponse.json({ error: "Not connected" }, { status: 401 });
   }
-  const { config, repoId } = (await req.json()) as Body;
+  if (!gh) {
+    return NextResponse.json(
+      { error: "GitHub not connected" },
+      { status: 401 },
+    );
+  }
+  const { config } = (await req.json()) as Body;
   if (!config) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
@@ -36,29 +43,35 @@ export async function POST(req: Request) {
     const project = await createProject(session.token, fullConfig);
     createdProjectId = project.id;
 
-    let deployment;
+    // Integration OAuth tokens don't reliably have permission to trigger
+    // production deployments via /v13/deployments. Instead, push a tiny
+    // commit to the fork's main — Vercel's GitHub webhook then fires the
+    // build with the project's own (full) permissions.
     try {
-      deployment = await triggerDeployment(session.token, {
-        projectName: project.name,
-        projectId: project.id,
-        repoId: repoId ?? project.link?.repoId,
-        repo: config.githubRepo,
-        ref: "main",
-        teamId: session.teamId ?? undefined,
-        target: "production",
-      });
-    } catch (triggerErr) {
-      // Maybe webhook fired in the meantime — poll for an existing deployment.
-      for (let i = 0; i < 10; i++) {
-        deployment = await latestDeployment(
-          session.token,
-          project.id,
-          session.teamId ?? undefined,
-        );
-        if (deployment) break;
-        await new Promise((r) => setTimeout(r, 1000));
+      await commitFile(
+        gh.token,
+        config.githubRepo,
+        ".vercel-deploy-trigger",
+        `Triggered at ${new Date().toISOString()}\n`,
+        "chore: trigger initial Vercel deploy",
+      );
+    } catch (e) {
+      if (e instanceof GitHubApiError) {
+        throw new Error(`Couldn't push trigger commit: ${e.message}`);
       }
-      if (!deployment) throw triggerErr;
+      throw e;
+    }
+
+    // Poll for the deployment to appear — webhook delivery is async.
+    let deployment = null;
+    for (let i = 0; i < 30; i++) {
+      deployment = await latestDeployment(
+        session.token,
+        project.id,
+        session.teamId ?? undefined,
+      );
+      if (deployment) break;
+      await new Promise((r) => setTimeout(r, 1000));
     }
 
     return NextResponse.json({
@@ -76,9 +89,7 @@ export async function POST(req: Request) {
           createdProjectId,
           session.teamId ?? undefined,
         );
-      } catch {
-        // best-effort cleanup; ignore
-      }
+      } catch {}
     }
     if (e instanceof VercelApiError) {
       return NextResponse.json(
