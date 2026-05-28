@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Builder Deploy Direct",
+  title: "Builder DAO Launcher",
   description:
-    "Deploy your Nouns Builder DAO site straight to Vercel via the API — no copy-paste, no roundtrip.",
+    "Launch your own Builder DAO site in 60 seconds. No code, no copy-paste — we fork the template, configure your env, and deploy it live to your Vercel.",
 };
 
 export default function RootLayout({

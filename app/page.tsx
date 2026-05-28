@@ -277,7 +277,7 @@ export default function Home() {
       {idx >= 0 && (
         <div className="fixed left-0 right-0 top-0 z-50 h-1 bg-white/5">
           <div
-            className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all duration-500"
+            className="h-full bg-gradient-to-r from-rose-400 to-rose-500 transition-all duration-500"
             style={{ width: `${progress}%` }}
           />
         </div>
@@ -570,25 +570,67 @@ function WelcomeScreen({
 }) {
   return (
     <div className="text-center">
-      <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-neutral-300 backdrop-blur">
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+      <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-rose-500/30 bg-rose-500/10 px-3 py-1 text-xs text-rose-200 backdrop-blur">
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />
         Builder DAO launcher
       </div>
       <h1 className="bg-gradient-to-b from-white via-white to-neutral-500 bg-clip-text text-5xl font-semibold tracking-tighter text-transparent sm:text-7xl">
-        Ship your DAO
+        Your DAO site,
         <br />
-        in 60 seconds
+        <span className="bg-gradient-to-b from-rose-300 to-rose-500 bg-clip-text text-transparent">
+          live in 60 seconds
+        </span>
       </h1>
-      <p className="mx-auto mt-6 max-w-md text-base text-neutral-400">
-        Answer a few questions, hit launch, and we&apos;ll fork the template,
-        configure the env, and deploy it live to your Vercel.
+      <p className="mx-auto mt-6 max-w-lg text-base text-neutral-400">
+        A no-code launcher for{" "}
+        <a
+          href="https://nouns.build"
+          target="_blank"
+          rel="noreferrer"
+          className="text-rose-300 underline-offset-2 hover:underline"
+        >
+          Builder DAO
+        </a>{" "}
+        front-ends. Connect your accounts, point us at your DAO, and we ship
+        a fully-configured site to your Vercel — no code, no copy-paste.
       </p>
+
+      <div className="mx-auto mt-10 grid max-w-xl gap-3 text-left sm:grid-cols-3">
+        <Step n="1" title="Authorize" desc="Vercel and GitHub, two clicks each." />
+        <Step n="2" title="Configure" desc="DAO token, chain, optional keys." />
+        <Step n="3" title="Launch" desc="We fork, configure env, deploy." />
+      </div>
+
       <button onClick={onStart} disabled={loading} className={`${cta} mt-10`}>
-        {loading ? "Checking session…" : "Begin"}
+        {loading ? "Checking session…" : "Get started"}
       </button>
       <div className="mt-4 text-xs text-neutral-600">
-        Press <Kbd>Enter</Kbd> or tap to start
+        Press <Kbd>Enter</Kbd> to continue
       </div>
+      <p className="mx-auto mt-8 max-w-md text-xs text-neutral-600">
+        Your tokens stay in your browser session and are sent only between
+        you, Vercel, and GitHub. We don&apos;t store anything server-side.
+      </p>
+    </div>
+  );
+}
+
+function Step({
+  n,
+  title,
+  desc,
+}: {
+  n: string;
+  title: string;
+  desc: string;
+}) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+      <div className="mb-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-rose-500/15 text-xs font-semibold text-rose-300">
+        {n}
+      </div>
+      <div className="text-sm font-semibold">{title}</div>
+      <div className="mt-1 text-xs text-neutral-500">{desc}</div>
     </div>
   );
 }
@@ -725,7 +767,7 @@ function NameStatusBadge({ status }: { status: NameStatus }) {
     );
   if (status === "ok")
     return (
-      <span className="flex items-center gap-1 rounded-md bg-emerald-500/15 px-2 py-1 text-xs text-emerald-400">
+      <span className="flex items-center gap-1 rounded-md bg-rose-500/15 px-2 py-1 text-xs text-rose-400">
         ✓ Available
       </span>
     );
@@ -858,7 +900,7 @@ function ChainScreen({
               className={[
                 "group flex w-full items-center justify-between rounded-2xl border p-5 text-left transition-all",
                 selected
-                  ? "border-emerald-500/40 bg-emerald-500/5"
+                  ? "border-rose-500/40 bg-rose-500/5"
                   : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]",
               ].join(" ")}
             >
@@ -866,7 +908,7 @@ function ChainScreen({
                 <div className="text-base font-semibold">{c.label}</div>
                 <div className="text-xs text-neutral-500">{c.network}</div>
               </div>
-              {selected && <span className="text-emerald-400">✓</span>}
+              {selected && <span className="text-rose-400">✓</span>}
             </button>
           );
         })}
@@ -901,16 +943,16 @@ function ForkScreen({
       />
       {forkedRepo ? (
         <div className="space-y-4">
-          <div className="flex items-center justify-between rounded-2xl border border-emerald-500/30 bg-emerald-500/5 px-5 py-4 text-sm">
+          <div className="flex items-center justify-between rounded-2xl border border-rose-500/30 bg-rose-500/5 px-5 py-4 text-sm">
             <span className="flex items-center gap-3">
-              <span className="text-emerald-400">✓</span>
+              <span className="text-rose-400">✓</span>
               <code className="text-neutral-200">{forkedRepo}</code>
             </span>
             <a
               href={`https://github.com/${forkedRepo}`}
               target="_blank"
               rel="noreferrer"
-              className="text-xs text-emerald-400 hover:underline"
+              className="text-xs text-rose-400 hover:underline"
             >
               Open ↗
             </a>
@@ -1042,7 +1084,7 @@ function BuildingScreen({ deployment }: { deployment: Deployment | null }) {
       <div className="mx-auto mb-8 flex h-20 w-20 items-center justify-center">
         <div className="relative h-16 w-16">
           <div className="absolute inset-0 rounded-full border-4 border-white/10" />
-          <div className="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-emerald-400" />
+          <div className="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-rose-400" />
         </div>
       </div>
       <h2 className="bg-gradient-to-b from-white to-neutral-500 bg-clip-text text-3xl font-semibold tracking-tight text-transparent">
@@ -1082,8 +1124,8 @@ function DoneScreen({
   return (
     <div className="text-center">
       <div className="relative mx-auto mb-8 h-20 w-20">
-        <div className="absolute inset-0 rounded-full bg-emerald-500/30 blur-2xl" />
-        <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-3xl text-black">
+        <div className="absolute inset-0 rounded-full bg-rose-500/30 blur-2xl" />
+        <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-rose-400 to-rose-600 text-3xl text-black">
           ✓
         </div>
       </div>
@@ -1202,7 +1244,7 @@ function QuestionHeader({
   return (
     <div className="mb-6">
       {number !== undefined && (
-        <div className="mb-3 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-emerald-400">
+        <div className="mb-3 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-rose-400">
           {number} →
         </div>
       )}
@@ -1247,8 +1289,8 @@ function GitHubMark() {
 function BackgroundGlow() {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="absolute -top-40 left-1/2 h-[600px] w-[900px] -translate-x-1/2 rounded-full bg-emerald-500/15 blur-[140px]" />
-      <div className="absolute bottom-0 right-0 h-[500px] w-[500px] rounded-full bg-blue-500/10 blur-[140px]" />
+      <div className="absolute -top-40 left-1/2 h-[600px] w-[900px] -translate-x-1/2 rounded-full bg-rose-500/15 blur-[140px]" />
+      <div className="absolute bottom-0 right-0 h-[500px] w-[500px] rounded-full bg-amber-500/10 blur-[140px]" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,black_80%)]" />
     </div>
   );
@@ -1267,7 +1309,7 @@ const primary =
   "inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-b from-white to-neutral-200 py-3 text-sm font-semibold text-black shadow-lg shadow-white/10 transition-all hover:from-neutral-100 hover:to-neutral-300 disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none";
 
 const ok =
-  "inline-flex items-center gap-2 rounded-lg bg-gradient-to-b from-emerald-400 to-emerald-500 px-5 py-2.5 text-sm font-semibold text-black shadow-lg shadow-emerald-500/20 transition-all hover:from-emerald-300 hover:to-emerald-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none";
+  "inline-flex items-center gap-2 rounded-lg bg-gradient-to-b from-rose-400 to-rose-500 px-5 py-2.5 text-sm font-semibold text-black shadow-lg shadow-rose-500/20 transition-all hover:from-rose-300 hover:to-rose-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none";
 
 const bigInput =
-  "w-full border-b-2 border-white/20 bg-transparent px-1 py-3 text-2xl font-medium text-white outline-none transition-colors placeholder:text-neutral-700 focus:border-emerald-400";
+  "w-full border-b-2 border-white/20 bg-transparent px-1 py-3 text-2xl font-medium text-white outline-none transition-colors placeholder:text-neutral-700 focus:border-rose-400";
