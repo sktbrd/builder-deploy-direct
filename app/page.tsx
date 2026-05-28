@@ -268,11 +268,11 @@ export default function Home() {
     env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID;
 
   return (
-    <div className="relative min-h-screen overflow-hidden text-white">
+    <div className="relative min-h-screen overflow-hidden text-neutral-900 dark:text-white">
       <BackgroundGlow />
 
       {idx >= 0 && (
-        <div className="fixed left-0 right-0 top-0 z-50 h-1 bg-white/5">
+        <div className="fixed left-0 right-0 top-0 z-50 h-1 bg-black/5 dark:bg-white/5">
           <div
             className="h-full bg-gradient-to-r from-blue-400 to-blue-500 transition-all duration-500"
             style={{ width: `${progress}%` }}
@@ -283,7 +283,7 @@ export default function Home() {
       {idx > 0 && (
         <button
           onClick={prev}
-          className="fixed left-6 top-6 z-40 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-neutral-200 backdrop-blur hover:text-white"
+          className="fixed left-6 top-6 z-40 rounded-full border border-black/10 dark:border-white/10 bg-white/70 dark:bg-black/40 px-3 py-1.5 text-sm text-neutral-800 dark:text-neutral-200 backdrop-blur hover:text-neutral-900 dark:text-white"
         >
           ← Back
         </button>
@@ -569,8 +569,8 @@ function WelcomeScreen({
 }) {
   return (
     <div className="text-center">
-      <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs text-blue-200 backdrop-blur">
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400" />
+      <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-600/40 bg-blue-500/15 px-3 py-1 text-sm font-medium text-blue-800 backdrop-blur dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200">
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-600 dark:bg-blue-400" />
         Builder DAO launcher
       </div>
       <h1
@@ -584,7 +584,7 @@ function WelcomeScreen({
         </span>
       </h1>
       <p
-        className="mx-auto mt-6 max-w-lg text-base text-neutral-700 dark:text-neutral-200"
+        className="mx-auto mt-6 max-w-lg text-lg text-neutral-700 dark:text-neutral-200"
         style={{ textShadow: "0 1px 8px rgba(0,0,0,0.25)" }}
       >
         A no-code launcher for{" "}
@@ -609,10 +609,10 @@ function WelcomeScreen({
       <button onClick={onStart} disabled={loading} className={`${cta} mt-10`}>
         {loading ? "Checking session…" : "Get started"}
       </button>
-      <div className="mt-4 text-xs text-neutral-600">
+      <div className="mt-4 text-sm text-neutral-700 dark:text-neutral-400">
         Press <Kbd>Enter</Kbd> to continue
       </div>
-      <p className="mx-auto mt-8 max-w-md text-xs text-neutral-600">
+      <p className="mx-auto mt-8 max-w-md text-sm text-neutral-700 dark:text-neutral-400">
         Your tokens stay in your browser session and are sent only between
         you, Vercel, and GitHub. We don&apos;t store anything server-side.
       </p>
@@ -630,12 +630,12 @@ function Step({
   desc: string;
 }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-black/40 p-4 backdrop-blur-md dark:bg-black/40">
-      <div className="mb-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-500/20 text-xs font-semibold text-blue-200">
+    <div className="rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-black/40 p-4 backdrop-blur-md dark:bg-black/40">
+      <div className="mb-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-500/20 text-sm font-semibold text-blue-700 dark:text-blue-200">
         {n}
       </div>
-      <div className="text-sm font-semibold text-white">{title}</div>
-      <div className="mt-1 text-xs text-neutral-300">{desc}</div>
+      <div className="text-base font-semibold text-neutral-900 dark:text-white">{title}</div>
+      <div className="mt-1 text-sm text-neutral-700 dark:text-neutral-300">{desc}</div>
     </div>
   );
 }
@@ -660,20 +660,20 @@ function ConnectScreen({
       <QuestionHeader number={questionNumber} title={question} hint={hint} />
       <a
         href={installHref}
-        className="group flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 p-6 backdrop-blur-md transition-all hover:border-white/20 hover:bg-black/40"
+        className="group flex items-center justify-between rounded-2xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-black/30 p-6 backdrop-blur-md transition-all hover:border-black/20 dark:border-white/20 hover:bg-white/70 dark:bg-black/40"
       >
         <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-black/10 dark:bg-white/10">
             {icon}
           </div>
           <div className="text-left">
-            <div className="text-lg font-semibold">Connect {name}</div>
-            <div className="text-xs text-neutral-500">
+            <div className="text-xl font-semibold">Connect {name}</div>
+            <div className="text-sm text-neutral-500">
               You&apos;ll be redirected to authorize.
             </div>
           </div>
         </div>
-        <span className="text-2xl text-neutral-500 transition-transform group-hover:translate-x-1 group-hover:text-white">
+        <span className="text-3xl text-neutral-500 transition-transform group-hover:translate-x-1 group-hover:text-neutral-900 dark:text-white">
           →
         </span>
       </a>
@@ -741,7 +741,7 @@ function InputScreen({
         )}
       </div>
       {showError && (
-        <div className="mt-2 text-xs text-red-400">{error}</div>
+        <div className="mt-2 text-sm text-red-400">{error}</div>
       )}
       <div className="mt-6 flex items-center gap-4">
         <button onClick={onNext} disabled={disabled} className={ok}>
@@ -750,12 +750,12 @@ function InputScreen({
         {optional && (
           <button
             onClick={onNext}
-            className="text-sm text-neutral-500 hover:text-white"
+            className="text-base text-neutral-500 hover:text-neutral-900 dark:text-white"
           >
             Skip
           </button>
         )}
-        <span className="text-xs text-neutral-600">
+        <span className="text-sm text-neutral-600">
           press <Kbd>Enter</Kbd>
         </span>
       </div>
@@ -766,19 +766,19 @@ function InputScreen({
 function NameStatusBadge({ status }: { status: NameStatus }) {
   if (status === "checking")
     return (
-      <span className="flex items-center gap-2 rounded-md bg-white/5 px-2 py-1 text-xs text-neutral-400">
+      <span className="flex items-center gap-2 rounded-md bg-black/5 dark:bg-white/5 px-2 py-1 text-sm text-neutral-600 dark:text-neutral-400">
         <Spinner /> Checking…
       </span>
     );
   if (status === "ok")
     return (
-      <span className="flex items-center gap-1 rounded-md bg-blue-500/15 px-2 py-1 text-xs text-blue-400">
+      <span className="flex items-center gap-1 rounded-md bg-blue-500/15 px-2 py-1 text-sm text-blue-600 dark:text-blue-400">
         ✓ Available
       </span>
     );
   if (status === "taken")
     return (
-      <span className="flex items-center gap-1 rounded-md bg-red-500/15 px-2 py-1 text-xs text-red-400">
+      <span className="flex items-center gap-1 rounded-md bg-red-500/15 px-2 py-1 text-sm text-red-400">
         × Taken
       </span>
     );
@@ -805,20 +805,20 @@ function BridgeScreen({
         target="_blank"
         rel="noreferrer"
         onClick={() => setOpened(true)}
-        className="group flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 p-6 backdrop-blur-md transition-all hover:border-white/20 hover:bg-black/40"
+        className="group flex items-center justify-between rounded-2xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-black/30 p-6 backdrop-blur-md transition-all hover:border-black/20 dark:border-white/20 hover:bg-white/70 dark:bg-black/40"
       >
         <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-black/10 dark:bg-white/10">
             <VercelMark />
           </div>
           <div className="text-left">
-            <div className="text-lg font-semibold">Install Vercel on GitHub</div>
-            <div className="text-xs text-neutral-500">
+            <div className="text-xl font-semibold">Install Vercel on GitHub</div>
+            <div className="text-sm text-neutral-500">
               Opens in a new tab. Pick the account or org with your fork.
             </div>
           </div>
         </div>
-        <span className="text-2xl text-neutral-500 transition-transform group-hover:translate-x-1 group-hover:text-white">
+        <span className="text-3xl text-neutral-500 transition-transform group-hover:translate-x-1 group-hover:text-neutral-900 dark:text-white">
           ↗
         </span>
       </a>
@@ -828,13 +828,13 @@ function BridgeScreen({
         </button>
         <button
           onClick={onConfirm}
-          className="text-sm text-neutral-500 hover:text-white"
+          className="text-base text-neutral-500 hover:text-neutral-900 dark:text-white"
         >
           Already done, skip
         </button>
       </div>
       {opened && (
-        <div className="mt-4 text-xs text-neutral-500">
+        <div className="mt-4 text-sm text-neutral-500">
           Once you&apos;ve installed it on GitHub, come back here and click
           &ldquo;I&apos;ve installed it&rdquo;.
         </div>
@@ -862,13 +862,13 @@ function ChoiceScreen({
           <button
             key={opt.label}
             onClick={opt.onSelect}
-            className="group flex w-full items-center justify-between rounded-2xl border border-white/10 bg-black/30 p-5 text-left backdrop-blur-md transition-all hover:border-white/20 hover:bg-black/40"
+            className="group flex w-full items-center justify-between rounded-2xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-black/30 p-5 text-left backdrop-blur-md transition-all hover:border-black/20 dark:border-white/20 hover:bg-white/70 dark:bg-black/40"
           >
             <div>
-              <div className="text-base font-semibold">{opt.label}</div>
-              <div className="text-xs text-neutral-500">{opt.desc}</div>
+              <div className="text-lg font-semibold">{opt.label}</div>
+              <div className="text-sm text-neutral-500">{opt.desc}</div>
             </div>
-            <span className="text-xl text-neutral-500 transition-transform group-hover:translate-x-1 group-hover:text-white">
+            <span className="text-2xl text-neutral-500 transition-transform group-hover:translate-x-1 group-hover:text-neutral-900 dark:text-white">
               →
             </span>
           </button>
@@ -906,14 +906,14 @@ function ChainScreen({
                 "group flex w-full items-center justify-between rounded-2xl border p-5 text-left transition-all",
                 selected
                   ? "border-blue-500/40 bg-blue-500/5"
-                  : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]",
+                  : "border-black/10 dark:border-white/10 bg-white/[0.03] hover:border-black/20 dark:border-white/20 hover:bg-white/[0.06]",
               ].join(" ")}
             >
               <div>
-                <div className="text-base font-semibold">{c.label}</div>
-                <div className="text-xs text-neutral-500">{c.network}</div>
+                <div className="text-lg font-semibold">{c.label}</div>
+                <div className="text-sm text-neutral-500">{c.network}</div>
               </div>
-              {selected && <span className="text-blue-400">✓</span>}
+              {selected && <span className="text-blue-600 dark:text-blue-400">✓</span>}
             </button>
           );
         })}
@@ -948,16 +948,16 @@ function ForkScreen({
       />
       {forkedRepo ? (
         <div className="space-y-4">
-          <div className="flex items-center justify-between rounded-2xl border border-blue-500/30 bg-blue-500/5 px-5 py-4 text-sm">
+          <div className="flex items-center justify-between rounded-2xl border border-blue-500/30 bg-blue-500/5 px-5 py-4 text-base">
             <span className="flex items-center gap-3">
-              <span className="text-blue-400">✓</span>
-              <code className="text-neutral-200">{forkedRepo}</code>
+              <span className="text-blue-600 dark:text-blue-400">✓</span>
+              <code className="text-neutral-800 dark:text-neutral-200">{forkedRepo}</code>
             </span>
             <a
               href={`https://github.com/${forkedRepo}`}
               target="_blank"
               rel="noreferrer"
-              className="text-xs text-blue-400 hover:underline"
+              className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
             >
               Open ↗
             </a>
@@ -1014,21 +1014,21 @@ function ReviewScreen({
   return (
     <div>
       <QuestionHeader number={undefined} title="Ready to launch" hint="Review and confirm." />
-      <dl className="space-y-2 rounded-2xl border border-white/10 bg-black/30 p-5 text-sm backdrop-blur-md">
+      <dl className="space-y-2 rounded-2xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-black/30 p-5 text-base backdrop-blur-md">
         <Row label="Project">{projectName}</Row>
         <Row label="Repo">
-          <code className="text-neutral-300">{forkedRepo}</code>
+          <code className="text-neutral-700 dark:text-neutral-300">{forkedRepo}</code>
         </Row>
         <Row label="Chain">{chain?.label ?? chainId}</Row>
         <Row label="Token">
-          <code className="text-neutral-300">{shortAddr(token)}</code>
+          <code className="text-neutral-700 dark:text-neutral-300">{shortAddr(token)}</code>
         </Row>
         <Row label="Vercel">
           <span className="flex items-center gap-2">
             @{vercelUsername}
             <button
               onClick={onEditVercel}
-              className="text-xs text-neutral-500 hover:text-white"
+              className="text-sm text-neutral-500 hover:text-neutral-900 dark:text-white"
             >
               change
             </button>
@@ -1039,7 +1039,7 @@ function ReviewScreen({
             @{ghLogin}
             <button
               onClick={onEditGithub}
-              className="text-xs text-neutral-500 hover:text-white"
+              className="text-sm text-neutral-500 hover:text-neutral-900 dark:text-white"
             >
               change
             </button>
@@ -1066,10 +1066,10 @@ function ReviewScreen({
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-white/5 py-1.5 last:border-0">
-      <dt className="text-xs uppercase tracking-wider text-neutral-500">
+      <dt className="text-sm uppercase tracking-wider text-neutral-500">
         {label}
       </dt>
-      <dd className="text-sm">{children}</dd>
+      <dd className="text-base">{children}</dd>
     </div>
   );
 }
@@ -1088,24 +1088,24 @@ function BuildingScreen({ deployment }: { deployment: Deployment | null }) {
     <div className="text-center">
       <div className="mx-auto mb-8 flex h-20 w-20 items-center justify-center">
         <div className="relative h-16 w-16">
-          <div className="absolute inset-0 rounded-full border-4 border-white/10" />
+          <div className="absolute inset-0 rounded-full border-4 border-black/10 dark:border-white/10" />
           <div className="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-blue-400" />
         </div>
       </div>
       <h2 className="bg-gradient-to-b from-white to-neutral-500 bg-clip-text text-3xl font-semibold tracking-tight text-transparent">
         {labels[state] ?? state}…
       </h2>
-      <p className="mt-3 text-sm text-neutral-400">
+      <p className="mt-3 text-base text-neutral-600 dark:text-neutral-400">
         Your DAO site is being built. This usually takes about 60 seconds.
       </p>
       {deployment && (
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3 text-xs">
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3 text-sm">
           {deployment.inspectorUrl && (
             <a
               href={deployment.inspectorUrl}
               target="_blank"
               rel="noreferrer"
-              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-neutral-300 hover:bg-white/10"
+              className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:bg-white/10"
             >
               Build logs ↗
             </a>
@@ -1137,8 +1137,8 @@ function DoneScreen({
       <h2 className="bg-gradient-to-b from-white to-neutral-500 bg-clip-text text-5xl font-semibold tracking-tight text-transparent">
         You&apos;re live
       </h2>
-      <p className="mt-3 text-sm text-neutral-400">
-        <code className="text-neutral-200">{projectName}</code> is deployed.
+      <p className="mt-3 text-base text-neutral-600 dark:text-neutral-400">
+        <code className="text-neutral-800 dark:text-neutral-200">{projectName}</code> is deployed.
       </p>
       {liveUrl ? (
         <a
@@ -1150,17 +1150,17 @@ function DoneScreen({
           Open {deployment?.url} →
         </a>
       ) : (
-        <div className="mt-8 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-neutral-400">
+        <div className="mt-8 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-4 text-base text-neutral-600 dark:text-neutral-400">
           Build still warming up. Open your project dashboard to watch it
           finish.
         </div>
       )}
-      <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-xs">
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-sm">
         <a
           href="https://vercel.com/dashboard/projects"
           target="_blank"
           rel="noreferrer"
-          className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-neutral-300 hover:bg-white/10"
+          className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:bg-white/10"
         >
           Open in Vercel ↗
         </a>
@@ -1169,14 +1169,14 @@ function DoneScreen({
             href={deployment.inspectorUrl}
             target="_blank"
             rel="noreferrer"
-            className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-neutral-300 hover:bg-white/10"
+            className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:bg-white/10"
           >
             Build logs ↗
           </a>
         )}
         <button
           onClick={onReset}
-          className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-neutral-300 hover:bg-white/10"
+          className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:bg-white/10"
         >
           Deploy another
         </button>
@@ -1198,11 +1198,11 @@ function ErrorScreen({
 }) {
   return (
     <div className="text-center">
-      <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-full bg-red-500/15 text-2xl text-red-400">
+      <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-full bg-red-500/15 text-3xl text-red-400">
         ×
       </div>
       <h2 className="text-3xl font-semibold tracking-tight">Something broke</h2>
-      <p className="mx-auto mt-3 max-w-md text-sm text-red-200">
+      <p className="mx-auto mt-3 max-w-md text-base text-red-200">
         {error ?? "Unknown error"}
       </p>
       {bridgeHint && (
@@ -1215,10 +1215,10 @@ function ErrorScreen({
           Install Vercel on GitHub →
         </a>
       )}
-      <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-xs">
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-sm">
         <button
           onClick={onRetry}
-          className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-neutral-300 hover:bg-white/10"
+          className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:bg-white/10"
         >
           ← Try again
         </button>
@@ -1227,7 +1227,7 @@ function ErrorScreen({
             href={debugUrl}
             target="_blank"
             rel="noreferrer"
-            className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-neutral-300 hover:bg-white/10"
+            className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:bg-white/10"
           >
             Open debug info ↗
           </a>
@@ -1249,21 +1249,21 @@ function QuestionHeader({
   return (
     <div className="mb-6">
       {number !== undefined && (
-        <div className="mb-3 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-400">
+        <div className="mb-3 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
           {number} →
         </div>
       )}
       <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
         {title}
       </h2>
-      {hint && <p className="mt-3 text-sm text-neutral-400">{hint}</p>}
+      {hint && <p className="mt-3 text-base text-neutral-600 dark:text-neutral-400">{hint}</p>}
     </div>
   );
 }
 
 function Kbd({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-neutral-300">
+    <kbd className="rounded border border-black/15 bg-black/5 px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 dark:border-white/15 dark:bg-white/10 dark:text-neutral-200">
       {children}
     </kbd>
   );
@@ -1324,7 +1324,7 @@ function ThemeToggle() {
     <button
       onClick={cycle}
       title={`Theme: ${label} — click to cycle`}
-      className="fixed right-6 top-6 z-40 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-neutral-200 backdrop-blur hover:text-white"
+      className="fixed right-6 top-6 z-40 rounded-full border border-black/10 dark:border-white/10 bg-white/70 dark:bg-black/40 px-3 py-1.5 text-sm text-neutral-800 dark:text-neutral-200 backdrop-blur hover:text-neutral-900 dark:text-white"
     >
       {label}
     </button>
@@ -1367,13 +1367,13 @@ function shortAddr(a: string): string {
 }
 
 const cta =
-  "inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-b from-white to-neutral-200 py-3.5 text-base font-semibold text-black shadow-lg shadow-white/10 transition-all hover:from-neutral-100 hover:to-neutral-300 disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none";
+  "inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-b from-neutral-900 to-black py-3.5 text-lg font-semibold text-neutral-900 dark:text-white shadow-lg shadow-black/30 transition-all hover:from-neutral-800 hover:to-neutral-900 disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none dark:from-white dark:to-neutral-200 dark:text-black dark:shadow-white/10 dark:hover:from-neutral-100 dark:hover:to-neutral-300";
 
 const primary =
-  "inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-b from-white to-neutral-200 py-3 text-sm font-semibold text-black shadow-lg shadow-white/10 transition-all hover:from-neutral-100 hover:to-neutral-300 disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none";
+  "inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-b from-neutral-900 to-black py-3 text-base font-semibold text-neutral-900 dark:text-white shadow-lg shadow-black/30 transition-all hover:from-neutral-800 hover:to-neutral-900 disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none dark:from-white dark:to-neutral-200 dark:text-black dark:shadow-white/10 dark:hover:from-neutral-100 dark:hover:to-neutral-300";
 
 const ok =
-  "inline-flex items-center gap-2 rounded-lg bg-gradient-to-b from-blue-400 to-blue-500 px-5 py-2.5 text-sm font-semibold text-black shadow-lg shadow-blue-500/20 transition-all hover:from-blue-300 hover:to-blue-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none";
+  "inline-flex items-center gap-2 rounded-lg bg-gradient-to-b from-blue-400 to-blue-500 px-5 py-2.5 text-base font-semibold text-black shadow-lg shadow-blue-500/20 transition-all hover:from-blue-300 hover:to-blue-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none";
 
 const bigInput =
-  "w-full border-b-2 border-white/20 bg-transparent px-1 py-3 text-2xl font-medium text-white outline-none transition-colors placeholder:text-neutral-700 focus:border-blue-400";
+  "w-full border-b-2 border-black/20 dark:border-white/20 bg-transparent px-1 py-3 text-3xl font-medium text-neutral-900 dark:text-white outline-none transition-colors placeholder:text-neutral-700 focus:border-blue-400";
