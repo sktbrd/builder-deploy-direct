@@ -100,16 +100,8 @@ export default function Home() {
   useEffect(() => {
     fetch("/api/me")
       .then((r) => r.json())
-      .then((data: Me) => {
-        setMe(data);
-        // If already connected, skip past welcome / connect screens to the
-        // bridge confirmation step (or name if bridge already confirmed).
-        if (data.vercel.connected && data.github.connected) {
-          setScreen(bridgeConfirmed ? "name" : "vercel-bridge");
-        }
-      })
+      .then((data: Me) => setMe(data))
       .finally(() => setLoadingMe(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Debounced project name uniqueness check against Vercel.
@@ -291,11 +283,13 @@ export default function Home() {
       {idx > 0 && (
         <button
           onClick={prev}
-          className="fixed left-6 top-6 z-40 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-neutral-400 backdrop-blur hover:text-white"
+          className="fixed left-6 top-6 z-40 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-neutral-200 backdrop-blur hover:text-white"
         >
           ← Back
         </button>
       )}
+
+      <ThemeToggle />
 
       <main className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 py-20">
         <ScreenFrame key={screen}>
@@ -579,20 +573,26 @@ function WelcomeScreen({
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400" />
         Builder DAO launcher
       </div>
-      <h1 className="bg-gradient-to-b from-white via-white to-neutral-500 bg-clip-text text-5xl font-semibold tracking-tighter text-transparent sm:text-7xl">
+      <h1
+        className="text-5xl font-semibold tracking-tighter text-neutral-900 dark:text-white sm:text-7xl"
+        style={{ textShadow: "0 2px 24px rgba(0,0,0,0.35)" }}
+      >
         Your DAO site,
         <br />
-        <span className="bg-gradient-to-b from-blue-300 to-blue-500 bg-clip-text text-transparent">
+        <span className="bg-gradient-to-r from-blue-700 to-blue-500 bg-clip-text text-transparent dark:from-white dark:via-blue-100 dark:to-white">
           live in 60 seconds
         </span>
       </h1>
-      <p className="mx-auto mt-6 max-w-lg text-base text-neutral-400">
+      <p
+        className="mx-auto mt-6 max-w-lg text-base text-neutral-700 dark:text-neutral-200"
+        style={{ textShadow: "0 1px 8px rgba(0,0,0,0.25)" }}
+      >
         A no-code launcher for{" "}
         <a
           href="https://nouns.build"
           target="_blank"
           rel="noreferrer"
-          className="text-blue-300 underline-offset-2 hover:underline"
+          className="text-blue-700 underline-offset-2 hover:underline dark:text-blue-200"
         >
           Builder DAO
         </a>{" "}
@@ -630,12 +630,12 @@ function Step({
   desc: string;
 }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-      <div className="mb-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-500/15 text-xs font-semibold text-blue-300">
+    <div className="rounded-xl border border-white/10 bg-black/40 p-4 backdrop-blur-md dark:bg-black/40">
+      <div className="mb-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-500/20 text-xs font-semibold text-blue-200">
         {n}
       </div>
-      <div className="text-sm font-semibold">{title}</div>
-      <div className="mt-1 text-xs text-neutral-500">{desc}</div>
+      <div className="text-sm font-semibold text-white">{title}</div>
+      <div className="mt-1 text-xs text-neutral-300">{desc}</div>
     </div>
   );
 }
@@ -660,7 +660,7 @@ function ConnectScreen({
       <QuestionHeader number={questionNumber} title={question} hint={hint} />
       <a
         href={installHref}
-        className="group flex items-center justify-between rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.06] to-white/[0.02] p-6 transition-all hover:border-white/20 hover:from-white/[0.08]"
+        className="group flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 p-6 backdrop-blur-md transition-all hover:border-white/20 hover:bg-black/40"
       >
         <div className="flex items-center gap-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10">
@@ -805,7 +805,7 @@ function BridgeScreen({
         target="_blank"
         rel="noreferrer"
         onClick={() => setOpened(true)}
-        className="group flex items-center justify-between rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.06] to-white/[0.02] p-6 transition-all hover:border-white/20 hover:from-white/[0.08]"
+        className="group flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 p-6 backdrop-blur-md transition-all hover:border-white/20 hover:bg-black/40"
       >
         <div className="flex items-center gap-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10">
@@ -862,7 +862,7 @@ function ChoiceScreen({
           <button
             key={opt.label}
             onClick={opt.onSelect}
-            className="group flex w-full items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-left transition-all hover:border-white/20 hover:bg-white/[0.06]"
+            className="group flex w-full items-center justify-between rounded-2xl border border-white/10 bg-black/30 p-5 text-left backdrop-blur-md transition-all hover:border-white/20 hover:bg-black/40"
           >
             <div>
               <div className="text-base font-semibold">{opt.label}</div>
@@ -1014,7 +1014,7 @@ function ReviewScreen({
   return (
     <div>
       <QuestionHeader number={undefined} title="Ready to launch" hint="Review and confirm." />
-      <dl className="space-y-2 rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm">
+      <dl className="space-y-2 rounded-2xl border border-white/10 bg-black/30 p-5 text-sm backdrop-blur-md">
         <Row label="Project">{projectName}</Row>
         <Row label="Repo">
           <code className="text-neutral-300">{forkedRepo}</code>
@@ -1291,38 +1291,72 @@ function GitHubMark() {
   );
 }
 
+type ThemeMode = "light" | "dark" | "system";
+
+function ThemeToggle() {
+  const [mode, setMode] = useState<ThemeMode>("system");
+
+  useEffect(() => {
+    const stored = (localStorage.getItem("theme") as ThemeMode | null) ?? "system";
+    setMode(stored);
+  }, []);
+
+  const apply = (next: ThemeMode) => {
+    setMode(next);
+    if (next === "system") {
+      localStorage.removeItem("theme");
+      const sysDark = matchMedia("(prefers-color-scheme: dark)").matches;
+      document.documentElement.classList.toggle("dark", sysDark);
+    } else {
+      localStorage.setItem("theme", next);
+      document.documentElement.classList.toggle("dark", next === "dark");
+    }
+  };
+
+  const cycle = () => {
+    const order: ThemeMode[] = ["system", "dark", "light"];
+    apply(order[(order.indexOf(mode) + 1) % order.length]);
+  };
+
+  const label = mode === "system" ? "Auto" : mode === "dark" ? "Dark" : "Light";
+
+  return (
+    <button
+      onClick={cycle}
+      title={`Theme: ${label} — click to cycle`}
+      className="fixed right-6 top-6 z-40 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-neutral-200 backdrop-blur hover:text-white"
+    >
+      {label}
+    </button>
+  );
+}
+
 function BackgroundGlow() {
   return (
-    <>
-      <div
-        className="pointer-events-none fixed inset-0"
-        style={{ zIndex: 0 }}
-      >
-        <PixelBlast
-          variant="square"
-          pixelSize={6}
-          color="#3B82F6"
-          patternScale={3}
-          patternDensity={1.2}
-          pixelSizeJitter={0.5}
-          enableRipples
-          rippleSpeed={0.4}
-          rippleThickness={0.12}
-          rippleIntensityScale={1.5}
-          liquid
-          liquidStrength={0.12}
-          liquidRadius={1.2}
-          liquidWobbleSpeed={5}
-          speed={0.6}
-          edgeFade={0.25}
-          transparent
-        />
-      </div>
-      <div
-        className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.6)_70%,rgba(0,0,0,0.9)_100%)]"
-        style={{ zIndex: 1 }}
+    <div
+      className="pointer-events-none fixed inset-0"
+      style={{ zIndex: 0 }}
+    >
+      <PixelBlast
+        variant="square"
+        pixelSize={5}
+        color="#3B82F6"
+        patternScale={2.5}
+        patternDensity={1.4}
+        pixelSizeJitter={0.4}
+        enableRipples
+        rippleSpeed={0.4}
+        rippleThickness={0.12}
+        rippleIntensityScale={1.5}
+        liquid
+        liquidStrength={0.12}
+        liquidRadius={1.2}
+        liquidWobbleSpeed={5}
+        speed={0.6}
+        edgeFade={0}
+        transparent
       />
-    </>
+    </div>
   );
 }
 

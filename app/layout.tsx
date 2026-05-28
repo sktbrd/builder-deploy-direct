@@ -7,6 +7,18 @@ export const metadata: Metadata = {
     "Launch your own Builder DAO site in 60 seconds. No code, no copy-paste — we fork the template, configure your env, and deploy it live to your Vercel.",
 };
 
+const themeInit = `
+(function(){
+  try {
+    var t = localStorage.getItem('theme');
+    var sysDark = matchMedia('(prefers-color-scheme: dark)').matches;
+    if (t === 'dark' || (!t && sysDark) || (t !== 'light' && sysDark)) {
+      document.documentElement.classList.add('dark');
+    }
+  } catch(e){}
+})();
+`;
+
 export default function RootLayout({
   children,
 }: {
@@ -14,6 +26,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
+      </head>
       <body>{children}</body>
     </html>
   );
