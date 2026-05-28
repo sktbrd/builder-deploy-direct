@@ -1367,10 +1367,10 @@ function shortAddr(a: string): string {
 }
 
 const cta =
-  "inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-b from-neutral-900 to-black py-3.5 text-lg font-semibold text-neutral-900 dark:text-white shadow-lg shadow-black/30 transition-all hover:from-neutral-800 hover:to-neutral-900 disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none dark:from-white dark:to-neutral-200 dark:text-black dark:shadow-white/10 dark:hover:from-neutral-100 dark:hover:to-neutral-300";
+  "inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-b from-neutral-900 to-black py-3.5 text-lg font-semibold text-white shadow-lg shadow-black/30 transition-all hover:from-neutral-800 hover:to-neutral-900 disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none dark:from-white dark:to-neutral-200 dark:text-neutral-950 dark:shadow-white/10 dark:hover:from-neutral-100 dark:hover:to-neutral-300";
 
 const primary =
-  "inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-b from-neutral-900 to-black py-3 text-base font-semibold text-neutral-900 dark:text-white shadow-lg shadow-black/30 transition-all hover:from-neutral-800 hover:to-neutral-900 disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none dark:from-white dark:to-neutral-200 dark:text-black dark:shadow-white/10 dark:hover:from-neutral-100 dark:hover:to-neutral-300";
+  "inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-b from-neutral-900 to-black py-3 text-base font-semibold text-white shadow-lg shadow-black/30 transition-all hover:from-neutral-800 hover:to-neutral-900 disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none dark:from-white dark:to-neutral-200 dark:text-neutral-950 dark:shadow-white/10 dark:hover:from-neutral-100 dark:hover:to-neutral-300";
 
 const ok =
   "inline-flex items-center gap-2 rounded-lg bg-gradient-to-b from-blue-400 to-blue-500 px-5 py-2.5 text-base font-semibold text-black shadow-lg shadow-blue-500/20 transition-all hover:from-blue-300 hover:to-blue-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none";
