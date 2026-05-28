@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { CHAIN_OPTIONS, type EnvKey } from "@/lib/config";
+
+const PixelBlast = dynamic(() => import("@/components/PixelBlast"), {
+  ssr: false,
+});
 
 type ScreenId =
   | "welcome"
@@ -271,13 +276,13 @@ export default function Home() {
     env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID;
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-black text-white">
+    <div className="relative min-h-screen overflow-hidden text-white">
       <BackgroundGlow />
 
       {idx >= 0 && (
         <div className="fixed left-0 right-0 top-0 z-50 h-1 bg-white/5">
           <div
-            className="h-full bg-gradient-to-r from-rose-400 to-rose-500 transition-all duration-500"
+            className="h-full bg-gradient-to-r from-blue-400 to-blue-500 transition-all duration-500"
             style={{ width: `${progress}%` }}
           />
         </div>
@@ -292,7 +297,7 @@ export default function Home() {
         </button>
       )}
 
-      <main className="relative flex min-h-screen flex-col items-center justify-center px-6 py-20">
+      <main className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 py-20">
         <ScreenFrame key={screen}>
           {screen === "welcome" && (
             <WelcomeScreen onStart={() => next()} loading={loadingMe} />
@@ -570,14 +575,14 @@ function WelcomeScreen({
 }) {
   return (
     <div className="text-center">
-      <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-rose-500/30 bg-rose-500/10 px-3 py-1 text-xs text-rose-200 backdrop-blur">
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />
+      <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs text-blue-200 backdrop-blur">
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400" />
         Builder DAO launcher
       </div>
       <h1 className="bg-gradient-to-b from-white via-white to-neutral-500 bg-clip-text text-5xl font-semibold tracking-tighter text-transparent sm:text-7xl">
         Your DAO site,
         <br />
-        <span className="bg-gradient-to-b from-rose-300 to-rose-500 bg-clip-text text-transparent">
+        <span className="bg-gradient-to-b from-blue-300 to-blue-500 bg-clip-text text-transparent">
           live in 60 seconds
         </span>
       </h1>
@@ -587,7 +592,7 @@ function WelcomeScreen({
           href="https://nouns.build"
           target="_blank"
           rel="noreferrer"
-          className="text-rose-300 underline-offset-2 hover:underline"
+          className="text-blue-300 underline-offset-2 hover:underline"
         >
           Builder DAO
         </a>{" "}
@@ -626,7 +631,7 @@ function Step({
 }) {
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-      <div className="mb-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-rose-500/15 text-xs font-semibold text-rose-300">
+      <div className="mb-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-500/15 text-xs font-semibold text-blue-300">
         {n}
       </div>
       <div className="text-sm font-semibold">{title}</div>
@@ -767,7 +772,7 @@ function NameStatusBadge({ status }: { status: NameStatus }) {
     );
   if (status === "ok")
     return (
-      <span className="flex items-center gap-1 rounded-md bg-rose-500/15 px-2 py-1 text-xs text-rose-400">
+      <span className="flex items-center gap-1 rounded-md bg-blue-500/15 px-2 py-1 text-xs text-blue-400">
         ✓ Available
       </span>
     );
@@ -900,7 +905,7 @@ function ChainScreen({
               className={[
                 "group flex w-full items-center justify-between rounded-2xl border p-5 text-left transition-all",
                 selected
-                  ? "border-rose-500/40 bg-rose-500/5"
+                  ? "border-blue-500/40 bg-blue-500/5"
                   : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]",
               ].join(" ")}
             >
@@ -908,7 +913,7 @@ function ChainScreen({
                 <div className="text-base font-semibold">{c.label}</div>
                 <div className="text-xs text-neutral-500">{c.network}</div>
               </div>
-              {selected && <span className="text-rose-400">✓</span>}
+              {selected && <span className="text-blue-400">✓</span>}
             </button>
           );
         })}
@@ -943,16 +948,16 @@ function ForkScreen({
       />
       {forkedRepo ? (
         <div className="space-y-4">
-          <div className="flex items-center justify-between rounded-2xl border border-rose-500/30 bg-rose-500/5 px-5 py-4 text-sm">
+          <div className="flex items-center justify-between rounded-2xl border border-blue-500/30 bg-blue-500/5 px-5 py-4 text-sm">
             <span className="flex items-center gap-3">
-              <span className="text-rose-400">✓</span>
+              <span className="text-blue-400">✓</span>
               <code className="text-neutral-200">{forkedRepo}</code>
             </span>
             <a
               href={`https://github.com/${forkedRepo}`}
               target="_blank"
               rel="noreferrer"
-              className="text-xs text-rose-400 hover:underline"
+              className="text-xs text-blue-400 hover:underline"
             >
               Open ↗
             </a>
@@ -1084,7 +1089,7 @@ function BuildingScreen({ deployment }: { deployment: Deployment | null }) {
       <div className="mx-auto mb-8 flex h-20 w-20 items-center justify-center">
         <div className="relative h-16 w-16">
           <div className="absolute inset-0 rounded-full border-4 border-white/10" />
-          <div className="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-rose-400" />
+          <div className="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-blue-400" />
         </div>
       </div>
       <h2 className="bg-gradient-to-b from-white to-neutral-500 bg-clip-text text-3xl font-semibold tracking-tight text-transparent">
@@ -1124,8 +1129,8 @@ function DoneScreen({
   return (
     <div className="text-center">
       <div className="relative mx-auto mb-8 h-20 w-20">
-        <div className="absolute inset-0 rounded-full bg-rose-500/30 blur-2xl" />
-        <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-rose-400 to-rose-600 text-3xl text-black">
+        <div className="absolute inset-0 rounded-full bg-blue-500/30 blur-2xl" />
+        <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-blue-600 text-3xl text-black">
           ✓
         </div>
       </div>
@@ -1244,7 +1249,7 @@ function QuestionHeader({
   return (
     <div className="mb-6">
       {number !== undefined && (
-        <div className="mb-3 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-rose-400">
+        <div className="mb-3 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-400">
           {number} →
         </div>
       )}
@@ -1288,11 +1293,36 @@ function GitHubMark() {
 
 function BackgroundGlow() {
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="absolute -top-40 left-1/2 h-[600px] w-[900px] -translate-x-1/2 rounded-full bg-rose-500/15 blur-[140px]" />
-      <div className="absolute bottom-0 right-0 h-[500px] w-[500px] rounded-full bg-amber-500/10 blur-[140px]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,black_80%)]" />
-    </div>
+    <>
+      <div
+        className="pointer-events-none fixed inset-0"
+        style={{ zIndex: 0 }}
+      >
+        <PixelBlast
+          variant="square"
+          pixelSize={6}
+          color="#3B82F6"
+          patternScale={3}
+          patternDensity={1.2}
+          pixelSizeJitter={0.5}
+          enableRipples
+          rippleSpeed={0.4}
+          rippleThickness={0.12}
+          rippleIntensityScale={1.5}
+          liquid
+          liquidStrength={0.12}
+          liquidRadius={1.2}
+          liquidWobbleSpeed={5}
+          speed={0.6}
+          edgeFade={0.25}
+          transparent
+        />
+      </div>
+      <div
+        className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.6)_70%,rgba(0,0,0,0.9)_100%)]"
+        style={{ zIndex: 1 }}
+      />
+    </>
   );
 }
 
@@ -1309,7 +1339,7 @@ const primary =
   "inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-b from-white to-neutral-200 py-3 text-sm font-semibold text-black shadow-lg shadow-white/10 transition-all hover:from-neutral-100 hover:to-neutral-300 disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none";
 
 const ok =
-  "inline-flex items-center gap-2 rounded-lg bg-gradient-to-b from-rose-400 to-rose-500 px-5 py-2.5 text-sm font-semibold text-black shadow-lg shadow-rose-500/20 transition-all hover:from-rose-300 hover:to-rose-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none";
+  "inline-flex items-center gap-2 rounded-lg bg-gradient-to-b from-blue-400 to-blue-500 px-5 py-2.5 text-sm font-semibold text-black shadow-lg shadow-blue-500/20 transition-all hover:from-blue-300 hover:to-blue-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none";
 
 const bigInput =
-  "w-full border-b-2 border-white/20 bg-transparent px-1 py-3 text-2xl font-medium text-white outline-none transition-colors placeholder:text-neutral-700 focus:border-rose-400";
+  "w-full border-b-2 border-white/20 bg-transparent px-1 py-3 text-2xl font-medium text-white outline-none transition-colors placeholder:text-neutral-700 focus:border-blue-400";
