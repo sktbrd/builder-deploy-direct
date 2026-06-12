@@ -16,12 +16,30 @@
   --pixel: #3b82f6;
 }
 
+/* Tailwind v4 preflight sets buttons to cursor: default; restore pointer
+   for enabled interactive elements. */
+button:not(:disabled),
+[role="button"]:not(:disabled) {
+  cursor: pointer;
+}
+
 html,
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", Roboto, "Helvetica Neue", Arial;
+}
+
+/* Radial scrim: fades the animated background behind the centered content
+   so text stays readable; edges keep the pixels at full strength. */
+.bg-scrim {
+  background: radial-gradient(
+    ellipse 75% 70% at 50% 48%,
+    color-mix(in srgb, var(--background) 85%, transparent) 0%,
+    color-mix(in srgb, var(--background) 55%, transparent) 48%,
+    transparent 78%
+  );
 }
 
 @keyframes fadeIn {

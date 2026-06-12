@@ -53,6 +53,13 @@ const INITIAL_ENV: Record<EnvKey, string> = {
   NEXT_PUBLIC_SITE_URL: "",
 };
 
+// Dev-only screen preview (?screen=review): seeds the state a screen needs
+// so it can be styled without going through OAuth. No flows are simulated.
+const previewTarget =
+  process.env.NODE_ENV === "development" && typeof window !== "undefined"
+    ? (new URLSearchParams(window.location.search).get("screen") as ScreenId | null)
+    : null;
+
 export default function Home() {
   const [screen, setScreen] = useState<ScreenId>("welcome");
   const [error, setError] = useState<string | null>(null);
@@ -98,10 +105,46 @@ export default function Home() {
   };
 
   useEffect(() => {
+    if (previewTarget) return;
     fetch("/api/me")
       .then((r) => r.json())
       .then((data: Me) => setMe(data))
       .finally(() => setLoadingMe(false));
+  }, []);
+
+  // Seed state for the dev screen preview (see previewTarget above).
+  useEffect(() => {
+    if (!previewTarget) return;
+    setLoadingMe(false);
+    const authScreens: ScreenId[] = ["welcome", "vercel", "github"];
+    if (!authScreens.includes(previewTarget)) {
+      setMe({
+        vercel: { connected: true, username: "preview", teamId: null },
+        github: { connected: true, login: "preview" },
+      });
+      if (previewTarget !== "vercel-bridge") setBridgeConfirmed(true);
+      setForkedRepo("preview/builder-template-app");
+      setForkedRepoId(1);
+      setNameStatus("ok");
+      setEnv((s) => ({
+        ...s,
+        NEXT_PUBLIC_DAO_TOKEN_ADDRESS: `0x${"ab".repeat(20)}`,
+        NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID: "preview-project-id",
+      }));
+    }
+    if (previewTarget === "building" || previewTarget === "done") {
+      setDeployment({
+        uid: "preview",
+        url: "my-dao-site.vercel.app",
+        readyState: previewTarget === "done" ? "READY" : "BUILDING",
+        inspectorUrl: "https://vercel.com",
+      });
+      setDeployedProject("my-dao-site");
+    }
+    if (previewTarget === "error") {
+      setError("Preview error message — styling the error screen.");
+    }
+    setScreen(previewTarget);
   }, []);
 
   // Debounced project name uniqueness check against Vercel.
@@ -109,6 +152,10 @@ export default function Home() {
     if (!me?.vercel.connected) return;
     if (validateProjectName(projectName)) {
       setNameStatus("idle");
+      return;
+    }
+    if (previewTarget) {
+      setNameStatus("ok");
       return;
     }
     setNameStatus("checking");
@@ -240,7 +287,7 @@ export default function Home() {
   };
 
   useEffect(() => {
-    if (screen !== "building" || !deployment) return;
+    if (previewTarget || screen !== "building" || !deployment) return;
     const poll = async () => {
       try {
         const res = await fetch("/api/status", {
@@ -298,7 +345,7 @@ export default function Home() {
       {idx > 0 && (
         <button
           onClick={prev}
-          className="fixed left-6 top-6 z-40 rounded-full border border-black/10 dark:border-white/10 bg-white/70 dark:bg-black/40 px-3 py-1.5 text-sm text-neutral-800 dark:text-neutral-200 backdrop-blur hover:text-neutral-900 dark:hover:text-white"
+          className="fixed left-6 top-6 z-40 rounded-full border border-black/10 dark:border-white/10 bg-white/70 dark:bg-black/40 px-3 py-1.5 text-sm text-neutral-800 dark:text-neutral-200 backdrop-blur hover:text-(--foreground)"
         >
           ← Back
         </button>
@@ -602,6 +649,7 @@ function WelcomeScreen({
           target="_blank"
           rel="noreferrer"
           className="text-blue-700 underline-offset-2 hover:underline dark:text-blue-200"
+          suppressHydrationWarning
         >
           Builder DAO
         </a>{" "}
@@ -682,7 +730,7 @@ function ConnectScreen({
             </div>
           </div>
         </div>
-        <span className="text-3xl text-neutral-500 transition-transform group-hover:translate-x-1 group-hover:text-neutral-900 dark:group-hover:text-white">
+        <span className="text-3xl text-neutral-500 transition-transform group-hover:translate-x-1 group-hover:text-(--foreground)">
           →
         </span>
       </a>
@@ -759,7 +807,7 @@ function InputScreen({
         {optional && (
           <button
             onClick={onNext}
-            className="text-base text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
+            className="text-base text-neutral-500 hover:text-(--foreground)"
           >
             Skip
           </button>
@@ -827,7 +875,7 @@ function BridgeScreen({
             </div>
           </div>
         </div>
-        <span className="text-3xl text-neutral-500 transition-transform group-hover:translate-x-1 group-hover:text-neutral-900 dark:group-hover:text-white">
+        <span className="text-3xl text-neutral-500 transition-transform group-hover:translate-x-1 group-hover:text-(--foreground)">
           ↗
         </span>
       </a>
@@ -837,7 +885,7 @@ function BridgeScreen({
         </button>
         <button
           onClick={onConfirm}
-          className="text-base text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
+          className="text-base text-neutral-500 hover:text-(--foreground)"
         >
           Already done, skip
         </button>
@@ -877,7 +925,7 @@ function ChoiceScreen({
               <div className="text-lg font-semibold">{opt.label}</div>
               <div className="text-sm text-neutral-500">{opt.desc}</div>
             </div>
-            <span className="text-2xl text-neutral-500 transition-transform group-hover:translate-x-1 group-hover:text-neutral-900 dark:group-hover:text-white">
+            <span className="text-2xl text-neutral-500 transition-transform group-hover:translate-x-1 group-hover:text-(--foreground)">
               →
             </span>
           </button>
@@ -1037,7 +1085,7 @@ function ReviewScreen({
             @{vercelUsername}
             <button
               onClick={onEditVercel}
-              className="text-sm text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
+              className="text-sm text-neutral-500 hover:text-(--foreground)"
             >
               change
             </button>
@@ -1048,7 +1096,7 @@ function ReviewScreen({
             @{ghLogin}
             <button
               onClick={onEditGithub}
-              className="text-sm text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
+              className="text-sm text-neutral-500 hover:text-(--foreground)"
             >
               change
             </button>
@@ -1345,19 +1393,24 @@ function ThemeToggle() {
     <button
       onClick={cycle}
       title={`Theme: ${labels[mode]} — click to switch to ${labels[nextMode]}`}
-      className="fixed right-6 top-6 z-40 rounded-full border border-black/10 dark:border-white/10 bg-white/70 dark:bg-black/40 px-3 py-1.5 text-sm text-neutral-800 dark:text-neutral-200 backdrop-blur hover:text-neutral-900 dark:hover:text-white"
+      className="fixed right-6 top-6 z-40 rounded-full border border-black/10 dark:border-white/10 bg-white/70 dark:bg-black/40 px-3 py-1.5 text-sm text-neutral-800 dark:text-neutral-200 backdrop-blur hover:text-(--foreground)"
     >
-      → {labels[nextMode]}
+      {labels[nextMode]}
     </button>
   );
 }
 
 function BackgroundGlow() {
   return (
-    <div
-      className="pointer-events-none fixed inset-0"
-      style={{ zIndex: 0 }}
-    >
+    <>
+      <div
+        className="bg-scrim pointer-events-none fixed inset-0"
+        style={{ zIndex: 1 }}
+      />
+      <div
+        className="pointer-events-none fixed inset-0"
+        style={{ zIndex: 0 }}
+      >
       <PixelBlast
         variant="square"
         pixelSize={5}
@@ -1377,7 +1430,8 @@ function BackgroundGlow() {
         edgeFade={0}
         transparent
       />
-    </div>
+      </div>
+    </>
   );
 }
 
