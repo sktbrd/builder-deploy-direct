@@ -137,11 +137,15 @@ export default function Home() {
         const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
         if (tag === "textarea" || tag === "button") return;
         const blocked: Record<string, boolean> = {
+          welcome: loadingMe,
+          fork: !forkedRepo,
           name: !!validateProjectName(projectName) || nameStatus !== "ok",
           token: !!validateTokenAddress(env.NEXT_PUBLIC_DAO_TOKEN_ADDRESS),
           walletconnect: !env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID,
         };
         const advancable = [
+          "welcome",
+          "fork",
           "name",
           "token",
           "walletconnect",
@@ -158,7 +162,7 @@ export default function Home() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [screen, flow, projectName, env, nameStatus]);
+  }, [screen, flow, projectName, env, nameStatus, loadingMe, forkedRepo]);
 
   const refreshMe = async () => {
     const res = await fetch("/api/me");
@@ -238,18 +242,22 @@ export default function Home() {
   useEffect(() => {
     if (screen !== "building" || !deployment) return;
     const poll = async () => {
-      const res = await fetch("/api/status", {
-        method: "POST",
-        body: JSON.stringify({ deploymentId: deployment.uid }),
-      });
-      const data = await res.json();
-      if (data.deployment) {
-        setDeployment(data.deployment);
-        if (data.deployment.readyState === "READY") setScreen("done");
-        if (data.deployment.readyState === "ERROR") {
-          setError("Build failed. Check the inspector for details.");
-          setScreen("error");
+      try {
+        const res = await fetch("/api/status", {
+          method: "POST",
+          body: JSON.stringify({ deploymentId: deployment.uid }),
+        });
+        const data = await res.json();
+        if (data.deployment) {
+          setDeployment(data.deployment);
+          if (data.deployment.readyState === "READY") setScreen("done");
+          if (data.deployment.readyState === "ERROR") {
+            setError("Build failed. Check the inspector for details.");
+            setScreen("error");
+          }
         }
+      } catch {
+        // transient network error — keep polling
       }
     };
     pollRef.current = setInterval(poll, 3000);
@@ -272,7 +280,14 @@ export default function Home() {
       <BackgroundGlow />
 
       {idx >= 0 && (
-        <div className="fixed left-0 right-0 top-0 z-50 h-1 bg-black/5 dark:bg-white/5">
+        <div
+          role="progressbar"
+          aria-label="Setup progress"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(progress)}
+          className="fixed left-0 right-0 top-0 z-50 h-1 bg-black/5 dark:bg-white/5"
+        >
           <div
             className="h-full bg-gradient-to-r from-blue-400 to-blue-500 transition-all duration-500"
             style={{ width: `${progress}%` }}
@@ -283,7 +298,7 @@ export default function Home() {
       {idx > 0 && (
         <button
           onClick={prev}
-          className="fixed left-6 top-6 z-40 rounded-full border border-black/10 dark:border-white/10 bg-white/70 dark:bg-black/40 px-3 py-1.5 text-sm text-neutral-800 dark:text-neutral-200 backdrop-blur hover:text-neutral-900 dark:text-white"
+          className="fixed left-6 top-6 z-40 rounded-full border border-black/10 dark:border-white/10 bg-white/70 dark:bg-black/40 px-3 py-1.5 text-sm text-neutral-800 dark:text-neutral-200 backdrop-blur hover:text-neutral-900 dark:hover:text-white"
         >
           ← Back
         </button>
@@ -573,20 +588,14 @@ function WelcomeScreen({
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-600 dark:bg-blue-400" />
         Builder DAO launcher
       </div>
-      <h1
-        className="text-5xl font-semibold tracking-tighter text-neutral-900 dark:text-white sm:text-7xl"
-        style={{ textShadow: "0 2px 24px rgba(0,0,0,0.35)" }}
-      >
+      <h1 className="text-5xl font-semibold tracking-tighter text-neutral-900 dark:text-white sm:text-7xl dark:[text-shadow:0_2px_24px_rgba(0,0,0,0.35)]">
         Your DAO site,
         <br />
         <span className="bg-gradient-to-r from-blue-700 to-blue-500 bg-clip-text text-transparent dark:from-white dark:via-blue-100 dark:to-white">
           live in 60 seconds
         </span>
       </h1>
-      <p
-        className="mx-auto mt-6 max-w-lg text-lg text-neutral-700 dark:text-neutral-200"
-        style={{ textShadow: "0 1px 8px rgba(0,0,0,0.25)" }}
-      >
+      <p className="mx-auto mt-6 max-w-lg text-lg text-neutral-700 dark:text-neutral-200 dark:[text-shadow:0_1px_8px_rgba(0,0,0,0.25)]">
         A no-code launcher for{" "}
         <a
           href="https://nouns.build"
@@ -630,7 +639,7 @@ function Step({
   desc: string;
 }) {
   return (
-    <div className="rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-black/40 p-4 backdrop-blur-md dark:bg-black/40">
+    <div className="rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-black/40 p-4 backdrop-blur-md">
       <div className="mb-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-500/20 text-sm font-semibold text-blue-700 dark:text-blue-200">
         {n}
       </div>
@@ -660,7 +669,7 @@ function ConnectScreen({
       <QuestionHeader number={questionNumber} title={question} hint={hint} />
       <a
         href={installHref}
-        className="group flex items-center justify-between rounded-2xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-black/30 p-6 backdrop-blur-md transition-all hover:border-black/20 dark:border-white/20 hover:bg-white/70 dark:bg-black/40"
+        className="group flex items-center justify-between rounded-2xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-black/30 p-6 backdrop-blur-md transition-all hover:border-black/20 dark:hover:border-white/20 hover:bg-white/70 dark:hover:bg-black/40"
       >
         <div className="flex items-center gap-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-black/10 dark:bg-white/10">
@@ -673,7 +682,7 @@ function ConnectScreen({
             </div>
           </div>
         </div>
-        <span className="text-3xl text-neutral-500 transition-transform group-hover:translate-x-1 group-hover:text-neutral-900 dark:text-white">
+        <span className="text-3xl text-neutral-500 transition-transform group-hover:translate-x-1 group-hover:text-neutral-900 dark:group-hover:text-white">
           →
         </span>
       </a>
@@ -750,7 +759,7 @@ function InputScreen({
         {optional && (
           <button
             onClick={onNext}
-            className="text-base text-neutral-500 hover:text-neutral-900 dark:text-white"
+            className="text-base text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
           >
             Skip
           </button>
@@ -805,7 +814,7 @@ function BridgeScreen({
         target="_blank"
         rel="noreferrer"
         onClick={() => setOpened(true)}
-        className="group flex items-center justify-between rounded-2xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-black/30 p-6 backdrop-blur-md transition-all hover:border-black/20 dark:border-white/20 hover:bg-white/70 dark:bg-black/40"
+        className="group flex items-center justify-between rounded-2xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-black/30 p-6 backdrop-blur-md transition-all hover:border-black/20 dark:hover:border-white/20 hover:bg-white/70 dark:hover:bg-black/40"
       >
         <div className="flex items-center gap-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-black/10 dark:bg-white/10">
@@ -818,7 +827,7 @@ function BridgeScreen({
             </div>
           </div>
         </div>
-        <span className="text-3xl text-neutral-500 transition-transform group-hover:translate-x-1 group-hover:text-neutral-900 dark:text-white">
+        <span className="text-3xl text-neutral-500 transition-transform group-hover:translate-x-1 group-hover:text-neutral-900 dark:group-hover:text-white">
           ↗
         </span>
       </a>
@@ -828,7 +837,7 @@ function BridgeScreen({
         </button>
         <button
           onClick={onConfirm}
-          className="text-base text-neutral-500 hover:text-neutral-900 dark:text-white"
+          className="text-base text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
         >
           Already done, skip
         </button>
@@ -862,13 +871,13 @@ function ChoiceScreen({
           <button
             key={opt.label}
             onClick={opt.onSelect}
-            className="group flex w-full items-center justify-between rounded-2xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-black/30 p-5 text-left backdrop-blur-md transition-all hover:border-black/20 dark:border-white/20 hover:bg-white/70 dark:bg-black/40"
+            className="group flex w-full items-center justify-between rounded-2xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-black/30 p-5 text-left backdrop-blur-md transition-all hover:border-black/20 dark:hover:border-white/20 hover:bg-white/70 dark:hover:bg-black/40"
           >
             <div>
               <div className="text-lg font-semibold">{opt.label}</div>
               <div className="text-sm text-neutral-500">{opt.desc}</div>
             </div>
-            <span className="text-2xl text-neutral-500 transition-transform group-hover:translate-x-1 group-hover:text-neutral-900 dark:text-white">
+            <span className="text-2xl text-neutral-500 transition-transform group-hover:translate-x-1 group-hover:text-neutral-900 dark:group-hover:text-white">
               →
             </span>
           </button>
@@ -905,8 +914,8 @@ function ChainScreen({
               className={[
                 "group flex w-full items-center justify-between rounded-2xl border p-5 text-left transition-all",
                 selected
-                  ? "border-blue-500/40 bg-blue-500/5"
-                  : "border-black/10 dark:border-white/10 bg-white/[0.03] hover:border-black/20 dark:border-white/20 hover:bg-white/[0.06]",
+                  ? "border-blue-500/50 bg-blue-500/10 backdrop-blur-md"
+                  : "border-black/10 dark:border-white/10 bg-white/60 dark:bg-black/30 backdrop-blur-md hover:border-black/20 dark:hover:border-white/20 hover:bg-white/70 dark:hover:bg-black/40",
               ].join(" ")}
             >
               <div>
@@ -1028,7 +1037,7 @@ function ReviewScreen({
             @{vercelUsername}
             <button
               onClick={onEditVercel}
-              className="text-sm text-neutral-500 hover:text-neutral-900 dark:text-white"
+              className="text-sm text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
             >
               change
             </button>
@@ -1039,7 +1048,7 @@ function ReviewScreen({
             @{ghLogin}
             <button
               onClick={onEditGithub}
-              className="text-sm text-neutral-500 hover:text-neutral-900 dark:text-white"
+              className="text-sm text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
             >
               change
             </button>
@@ -1065,7 +1074,7 @@ function ReviewScreen({
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-white/5 py-1.5 last:border-0">
+    <div className="flex items-center justify-between gap-3 border-b border-black/5 dark:border-white/5 py-1.5 last:border-0">
       <dt className="text-sm uppercase tracking-wider text-neutral-500">
         {label}
       </dt>
@@ -1092,7 +1101,7 @@ function BuildingScreen({ deployment }: { deployment: Deployment | null }) {
           <div className="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-blue-400" />
         </div>
       </div>
-      <h2 className="bg-gradient-to-b from-white to-neutral-500 bg-clip-text text-3xl font-semibold tracking-tight text-transparent">
+      <h2 className="bg-gradient-to-b from-neutral-900 to-neutral-500 dark:from-white bg-clip-text text-3xl font-semibold tracking-tight text-transparent">
         {labels[state] ?? state}…
       </h2>
       <p className="mt-3 text-base text-neutral-600 dark:text-neutral-400">
@@ -1105,7 +1114,7 @@ function BuildingScreen({ deployment }: { deployment: Deployment | null }) {
               href={deployment.inspectorUrl}
               target="_blank"
               rel="noreferrer"
-              className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:bg-white/10"
+              className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:hover:bg-white/10"
             >
               Build logs ↗
             </a>
@@ -1134,7 +1143,7 @@ function DoneScreen({
           ✓
         </div>
       </div>
-      <h2 className="bg-gradient-to-b from-white to-neutral-500 bg-clip-text text-5xl font-semibold tracking-tight text-transparent">
+      <h2 className="bg-gradient-to-b from-neutral-900 to-neutral-500 dark:from-white bg-clip-text text-5xl font-semibold tracking-tight text-transparent">
         You&apos;re live
       </h2>
       <p className="mt-3 text-base text-neutral-600 dark:text-neutral-400">
@@ -1160,7 +1169,7 @@ function DoneScreen({
           href="https://vercel.com/dashboard/projects"
           target="_blank"
           rel="noreferrer"
-          className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:bg-white/10"
+          className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:hover:bg-white/10"
         >
           Open in Vercel ↗
         </a>
@@ -1169,14 +1178,14 @@ function DoneScreen({
             href={deployment.inspectorUrl}
             target="_blank"
             rel="noreferrer"
-            className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:bg-white/10"
+            className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:hover:bg-white/10"
           >
             Build logs ↗
           </a>
         )}
         <button
           onClick={onReset}
-          className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:bg-white/10"
+          className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:hover:bg-white/10"
         >
           Deploy another
         </button>
@@ -1202,7 +1211,7 @@ function ErrorScreen({
         ×
       </div>
       <h2 className="text-3xl font-semibold tracking-tight">Something broke</h2>
-      <p className="mx-auto mt-3 max-w-md text-base text-red-200">
+      <p className="mx-auto mt-3 max-w-md text-base text-red-600 dark:text-red-200">
         {error ?? "Unknown error"}
       </p>
       {bridgeHint && (
@@ -1218,7 +1227,7 @@ function ErrorScreen({
       <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-sm">
         <button
           onClick={onRetry}
-          className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:bg-white/10"
+          className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:hover:bg-white/10"
         >
           ← Try again
         </button>
@@ -1227,7 +1236,7 @@ function ErrorScreen({
             href={debugUrl}
             target="_blank"
             rel="noreferrer"
-            className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:bg-white/10"
+            className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:hover:bg-white/10"
           >
             Open debug info ↗
           </a>
@@ -1277,7 +1286,7 @@ function Spinner() {
 
 function VercelMark() {
   return (
-    <svg viewBox="0 0 76 65" className="h-5 w-5 fill-white">
+    <svg viewBox="0 0 76 65" className="h-5 w-5 fill-neutral-900 dark:fill-white">
       <path d="M37.527.182l37.527 64.99H0L37.527.182z" />
     </svg>
   );
@@ -1285,7 +1294,7 @@ function VercelMark() {
 
 function GitHubMark() {
   return (
-    <svg viewBox="0 0 16 16" className="h-5 w-5 fill-white">
+    <svg viewBox="0 0 16 16" className="h-5 w-5 fill-neutral-900 dark:fill-white">
       <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
     </svg>
   );
@@ -1301,6 +1310,15 @@ function ThemeToggle() {
     setMode(stored);
   }, []);
 
+  useEffect(() => {
+    if (mode !== "system") return;
+    const mq = matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () =>
+      document.documentElement.classList.toggle("dark", mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [mode]);
+
   const apply = (next: ThemeMode) => {
     setMode(next);
     if (next === "system") {
@@ -1313,20 +1331,23 @@ function ThemeToggle() {
     }
   };
 
-  const cycle = () => {
-    const order: ThemeMode[] = ["system", "dark", "light"];
-    apply(order[(order.indexOf(mode) + 1) % order.length]);
-  };
+  const order: ThemeMode[] = ["system", "dark", "light"];
+  const nextMode = order[(order.indexOf(mode) + 1) % order.length];
+  const cycle = () => apply(nextMode);
 
-  const label = mode === "system" ? "Auto" : mode === "dark" ? "Dark" : "Light";
+  const labels: Record<ThemeMode, string> = {
+    system: "Auto",
+    dark: "Dark",
+    light: "Light",
+  };
 
   return (
     <button
       onClick={cycle}
-      title={`Theme: ${label} — click to cycle`}
-      className="fixed right-6 top-6 z-40 rounded-full border border-black/10 dark:border-white/10 bg-white/70 dark:bg-black/40 px-3 py-1.5 text-sm text-neutral-800 dark:text-neutral-200 backdrop-blur hover:text-neutral-900 dark:text-white"
+      title={`Theme: ${labels[mode]} — click to switch to ${labels[nextMode]}`}
+      className="fixed right-6 top-6 z-40 rounded-full border border-black/10 dark:border-white/10 bg-white/70 dark:bg-black/40 px-3 py-1.5 text-sm text-neutral-800 dark:text-neutral-200 backdrop-blur hover:text-neutral-900 dark:hover:text-white"
     >
-      {label}
+      → {labels[nextMode]}
     </button>
   );
 }
@@ -1376,4 +1397,4 @@ const ok =
   "inline-flex items-center gap-2 rounded-lg bg-gradient-to-b from-blue-400 to-blue-500 px-5 py-2.5 text-base font-semibold text-black shadow-lg shadow-blue-500/20 transition-all hover:from-blue-300 hover:to-blue-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none";
 
 const bigInput =
-  "w-full border-b-2 border-black/20 dark:border-white/20 bg-transparent px-1 py-3 text-3xl font-medium text-neutral-900 dark:text-white outline-none transition-colors placeholder:text-neutral-700 focus:border-blue-400";
+  "w-full border-b-2 border-black/20 dark:border-white/20 bg-transparent px-1 py-3 text-3xl font-medium text-neutral-900 dark:text-white outline-none transition-colors placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:border-blue-400";
