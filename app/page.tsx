@@ -288,6 +288,18 @@ export default function Home() {
 
   useEffect(() => {
     if (previewTarget || screen !== "building" || !deployment) return;
+    // Tolerate transient failures, but give up after ~30s of consecutive
+    // ones (expired session, deleted deployment) instead of spinning forever.
+    let failures = 0;
+    const stall = () => {
+      failures += 1;
+      if (failures >= 10) {
+        setError(
+          "Lost track of the build — open the build logs on Vercel to follow it.",
+        );
+        setScreen("error");
+      }
+    };
     const poll = async () => {
       try {
         const res = await fetch("/api/status", {
@@ -295,16 +307,23 @@ export default function Home() {
           body: JSON.stringify({ deploymentId: deployment.uid }),
         });
         const data = await res.json();
-        if (data.deployment) {
-          setDeployment(data.deployment);
-          if (data.deployment.readyState === "READY") setScreen("done");
-          if (data.deployment.readyState === "ERROR") {
-            setError("Build failed. Check the inspector for details.");
-            setScreen("error");
-          }
+        if (!res.ok || !data.deployment) {
+          stall();
+          return;
+        }
+        failures = 0;
+        setDeployment(data.deployment);
+        if (data.deployment.readyState === "READY") setScreen("done");
+        if (data.deployment.readyState === "ERROR") {
+          setError("Build failed. Check the inspector for details.");
+          setScreen("error");
+        }
+        if (data.deployment.readyState === "CANCELED") {
+          setError("Build was canceled. Check the inspector for details.");
+          setScreen("error");
         }
       } catch {
-        // transient network error — keep polling
+        stall();
       }
     };
     pollRef.current = setInterval(poll, 3000);
