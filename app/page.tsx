@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { CHAIN_OPTIONS, type EnvKey } from "@/lib/config";
 
@@ -52,6 +53,27 @@ const INITIAL_ENV: Record<EnvKey, string> = {
   NEXT_PUBLIC_PINATA_GATEWAY: "",
   NEXT_PUBLIC_SITE_URL: "",
 };
+
+// Walkthrough shown in the "Connect Vercel" dialog. Drop the screenshots into
+// public/vercel-guide/ with these exact names. The red highlight is already
+// baked into these screenshots, so no `highlight` overlay is set here.
+const VERCEL_GUIDE_STEPS: GuideStep[] = [
+  {
+    image: "/vercel-guide/step-1-add-integration.png",
+    alt: "Vercel integration page with the Add Integration button highlighted",
+    caption: 'Click "Add Integration"',
+  },
+  {
+    image: "/vercel-guide/step-2-select-team-install.png",
+    alt: "Vercel install dialog with the team selector highlighted",
+    caption: 'Select your Vercel team, then click "Install"',
+  },
+  {
+    image: "/vercel-guide/step-3-configure.png",
+    alt: "Vercel installation overview with the Configure button highlighted",
+    caption: 'Click "Configure" to come back and finish setup',
+  },
+];
 
 // Dev-only screen preview (?screen=review): seeds the state a screen needs
 // so it can be styled without going through OAuth. No flows are simulated.
@@ -288,6 +310,18 @@ export default function Home() {
 
   useEffect(() => {
     if (previewTarget || screen !== "building" || !deployment) return;
+    // Tolerate transient failures, but give up after ~30s of consecutive
+    // ones (expired session, deleted deployment) instead of spinning forever.
+    let failures = 0;
+    const stall = () => {
+      failures += 1;
+      if (failures >= 10) {
+        setError(
+          "Lost track of the build — open the build logs on Vercel to follow it.",
+        );
+        setScreen("error");
+      }
+    };
     const poll = async () => {
       try {
         const res = await fetch("/api/status", {
@@ -295,16 +329,23 @@ export default function Home() {
           body: JSON.stringify({ deploymentId: deployment.uid }),
         });
         const data = await res.json();
-        if (data.deployment) {
-          setDeployment(data.deployment);
-          if (data.deployment.readyState === "READY") setScreen("done");
-          if (data.deployment.readyState === "ERROR") {
-            setError("Build failed. Check the inspector for details.");
-            setScreen("error");
-          }
+        if (!res.ok || !data.deployment) {
+          stall();
+          return;
+        }
+        failures = 0;
+        setDeployment(data.deployment);
+        if (data.deployment.readyState === "READY") setScreen("done");
+        if (data.deployment.readyState === "ERROR") {
+          setError("Build failed. Check the inspector for details.");
+          setScreen("error");
+        }
+        if (data.deployment.readyState === "CANCELED") {
+          setError("Build was canceled. Check the inspector for details.");
+          setScreen("error");
         }
       } catch {
-        // transient network error — keep polling
+        stall();
       }
     };
     pollRef.current = setInterval(poll, 3000);
@@ -365,7 +406,8 @@ export default function Home() {
               installHref="/api/vercel/install"
               questionNumber={1}
               question="First, connect Vercel"
-              hint="We deploy your site to your own Vercel account."
+              hint="Connection 1 of 2 — you'll connect GitHub next. We deploy your site to your own Vercel account."
+              steps={VERCEL_GUIDE_STEPS}
             />
           )}
           {screen === "github" && (
@@ -375,7 +417,8 @@ export default function Home() {
               installHref="/api/github/install"
               questionNumber={me?.vercel.connected ? 2 : 1}
               question="Now, connect GitHub"
-              hint="So we can fork the template into your account."
+              hint="Connection 2 of 2 — the last one. So we can fork the template into your account."
+              confirmHint={'On GitHub, click the green "Authorize" button to continue.'}
             />
           )}
           {screen === "vercel-bridge" && (
@@ -653,8 +696,9 @@ function WelcomeScreen({
         >
           Builder DAO
         </a>{" "}
-        front-ends. Connect your accounts, point us at your DAO, and we ship
-        a fully-configured site to your Vercel — no code, no copy-paste.
+        front-ends. Connect your Vercel and GitHub accounts, point us at your
+        DAO, and we ship a fully-configured site to your Vercel — no code, no
+        copy-paste.
       </p>
 
       <div className="mx-auto mt-10 grid max-w-xl gap-3 text-left sm:grid-cols-3">
@@ -697,6 +741,61 @@ function Step({
   );
 }
 
+// A single step shown inside the connect dialog. `image` is a path under
+// /public; `highlight` draws a red box over the screenshot (percent values so
+// it scales with the image). Tweak the highlight numbers after dropping in the
+// real screenshots — no need to re-edit the image itself.
+type GuideStep = {
+  image: string;
+  alt: string;
+  caption: string;
+  highlight?: { top: string; left: string; width: string; height: string };
+};
+
+function GuideImage({
+  src,
+  alt,
+  highlight,
+}: {
+  src: string;
+  alt: string;
+  highlight?: GuideStep["highlight"];
+}) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <div className="relative aspect-16/10 max-h-[55vh] w-full overflow-hidden rounded-lg border border-black/10 bg-neutral-100 dark:border-white/15 dark:bg-neutral-900">
+      {failed ? (
+        <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 p-4 text-center text-xs text-neutral-500">
+          <span className="font-medium">Screenshot pending</span>
+          <code className="rounded bg-black/5 px-1.5 py-0.5 text-[10px] dark:bg-white/10">
+            {src}
+          </code>
+        </div>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt={alt}
+          onError={() => setFailed(true)}
+          className="h-full w-full object-contain"
+        />
+      )}
+      {highlight && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute rounded-md border-2 border-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.25)]"
+          style={{
+            top: highlight.top,
+            left: highlight.left,
+            width: highlight.width,
+            height: highlight.height,
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 function ConnectScreen({
   name,
   icon,
@@ -704,6 +803,8 @@ function ConnectScreen({
   questionNumber,
   question,
   hint,
+  steps,
+  confirmHint,
 }: {
   name: string;
   icon: React.ReactNode;
@@ -711,13 +812,40 @@ function ConnectScreen({
   questionNumber: number;
   question: string;
   hint: string;
+  steps?: GuideStep[];
+  confirmHint?: string;
 }) {
+  const [confirming, setConfirming] = useState(false);
+  const [step, setStep] = useState(0);
+  const hasGuide = !!steps && steps.length > 0;
+  const lastStep = hasGuide ? steps!.length - 1 : 0;
+  const current = hasGuide ? steps![Math.min(step, lastStep)] : undefined;
+
+  const openDialog = () => {
+    setStep(0);
+    setConfirming(true);
+  };
+
+  // While the dialog is open: Escape closes it, arrows step through the guide.
+  useEffect(() => {
+    if (!confirming) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setConfirming(false);
+      if (!hasGuide) return;
+      if (e.key === "ArrowRight") setStep((s) => Math.min(s + 1, lastStep));
+      if (e.key === "ArrowLeft") setStep((s) => Math.max(s - 1, 0));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [confirming, hasGuide, lastStep]);
+
   return (
     <div>
       <QuestionHeader number={questionNumber} title={question} hint={hint} />
-      <a
-        href={installHref}
-        className="group flex items-center justify-between rounded-2xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-black/30 p-6 backdrop-blur-md transition-all hover:border-black/20 dark:hover:border-white/20 hover:bg-white/70 dark:hover:bg-black/40"
+      <button
+        type="button"
+        onClick={openDialog}
+        className="group flex w-full items-center justify-between rounded-2xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-black/30 p-6 text-left backdrop-blur-md transition-all hover:border-black/20 dark:hover:border-white/20 hover:bg-white/70 dark:hover:bg-black/40"
       >
         <div className="flex items-center gap-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-black/10 dark:bg-white/10">
@@ -733,7 +861,133 @@ function ConnectScreen({
         <span className="text-3xl text-neutral-500 transition-transform group-hover:translate-x-1 group-hover:text-(--foreground)">
           →
         </span>
-      </a>
+      </button>
+
+      {confirming &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="connect-confirm-title"
+            className="fixed inset-0 z-100 flex items-center justify-center p-4"
+          >
+            <div
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setConfirming(false)}
+            />
+            <div
+              className={`relative flex max-h-[88vh] w-full flex-col overflow-hidden rounded-2xl border border-black/10 bg-white shadow-2xl dark:border-white/10 dark:bg-neutral-950 ${
+                hasGuide ? "max-w-4xl" : "max-w-md"
+              }`}
+            >
+              <div className="flex items-center gap-3 border-b border-black/10 p-5 dark:border-white/10">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-black/10 dark:bg-white/10">
+                  {icon}
+                </div>
+                <div>
+                  <div
+                    id="connect-confirm-title"
+                    className="text-lg font-semibold text-neutral-900 dark:text-white"
+                  >
+                    {hasGuide
+                      ? `How to connect ${name}`
+                      : `You're leaving for ${name}`}
+                  </div>
+                  <div className="text-sm text-neutral-500">
+                    {hasGuide
+                      ? `Follow these steps once ${name} opens.`
+                      : "You'll come back here automatically afterwards."}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-5">
+                {hasGuide && current ? (
+                  <div>
+                    <div className="mb-3 flex items-center gap-2">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-xs font-semibold text-blue-700 dark:text-blue-200">
+                        {step + 1}
+                      </span>
+                      <span className="text-base font-medium text-neutral-800 dark:text-neutral-200">
+                        {current.caption}
+                      </span>
+                    </div>
+
+                    <GuideImage
+                      src={current.image}
+                      alt={current.alt}
+                      highlight={current.highlight}
+                    />
+
+                    <div className="mt-4 flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => setStep((s) => Math.max(s - 1, 0))}
+                        disabled={step === 0}
+                        className="rounded-lg px-3 py-2 text-sm font-medium text-neutral-600 transition-colors hover:text-(--foreground) disabled:cursor-not-allowed disabled:opacity-30 dark:text-neutral-300"
+                      >
+                        ← Back
+                      </button>
+
+                      <div className="flex items-center gap-1.5">
+                        {steps!.map((s, i) => (
+                          <button
+                            key={s.image}
+                            type="button"
+                            aria-label={`Go to step ${i + 1}`}
+                            onClick={() => setStep(i)}
+                            className={`h-2 rounded-full transition-all ${
+                              i === step
+                                ? "w-5 bg-blue-500"
+                                : "w-2 bg-black/20 hover:bg-black/40 dark:bg-white/20 dark:hover:bg-white/40"
+                            }`}
+                          />
+                        ))}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setStep((s) => Math.min(s + 1, lastStep))}
+                        disabled={step === lastStep}
+                        className="rounded-lg px-3 py-2 text-sm font-medium text-neutral-600 transition-colors hover:text-(--foreground) disabled:cursor-not-allowed disabled:opacity-30 dark:text-neutral-300"
+                      >
+                        Next →
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-300">
+                      We&apos;ll open {name} in this window so you can authorize
+                      the connection. After you approve, you&apos;ll come back
+                      here automatically to continue setup.
+                    </p>
+                    {confirmHint && (
+                      <p className="mt-3 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-sm text-blue-800 dark:border-blue-400/30 dark:bg-blue-400/10 dark:text-blue-200">
+                        {confirmHint}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-3 border-t border-black/10 p-5 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setConfirming(false)}
+                  className="rounded-lg px-4 py-2.5 text-base font-medium text-neutral-600 dark:text-neutral-300 hover:text-(--foreground)"
+                >
+                  Cancel
+                </button>
+                <a href={installHref} className={ok}>
+                  Continue to {name} →
+                </a>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -1306,8 +1560,8 @@ function QuestionHeader({
   return (
     <div className="mb-6">
       {number !== undefined && (
-        <div className="mb-3 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-          {number} →
+        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-sm font-semibold uppercase tracking-wider text-blue-700 backdrop-blur-md dark:border-blue-400/30 dark:bg-blue-400/15 dark:text-blue-200">
+          Step {number}
         </div>
       )}
       <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
