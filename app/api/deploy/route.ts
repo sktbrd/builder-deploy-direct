@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import type { DeployConfig } from "@/lib/config";
 import {
   createProject,
+  getProject,
   latestDeployment,
-  deleteProject,
   VercelApiError,
 } from "@/lib/vercel";
 import { commitFile, GitHubApiError } from "@/lib/github";
@@ -15,6 +15,9 @@ type Body = {
   config: Omit<DeployConfig, "teamId">;
   repoId?: number;
 };
+
+// Stages let the UI tailor recovery to where things actually broke.
+type Stage = "create" | "trigger";
 
 export async function POST(req: Request) {
   const session = await readSession();
@@ -37,72 +40,81 @@ export async function POST(req: Request) {
     ...config,
     teamId: session.teamId ?? undefined,
   };
+  const teamId = session.teamId ?? undefined;
 
-  let createdProjectId: string | null = null;
+  const fail = (stage: Stage, e: unknown, extra: Record<string, unknown> = {}) => {
+    const status =
+      e instanceof VercelApiError || e instanceof GitHubApiError
+        ? e.status
+        : 500;
+    const code = e instanceof VercelApiError ? e.code : undefined;
+    return NextResponse.json(
+      {
+        stage,
+        error: e instanceof Error ? e.message : "Unknown error",
+        code,
+        ...extra,
+      },
+      { status },
+    );
+  };
+
+  // ── Stage 1: create the project (idempotent — reuse on retry) ─────────────
+  let project;
   try {
-    const project = await createProject(session.token, fullConfig);
-    createdProjectId = project.id;
-
-    // Integration OAuth tokens don't reliably have permission to trigger
-    // production deployments via /v13/deployments. Instead, push a tiny
-    // commit to the fork's main — Vercel's GitHub webhook then fires the
-    // build with the project's own (full) permissions.
-    try {
-      await commitFile(
-        gh.token,
-        config.githubRepo,
-        ".vercel-deploy-trigger",
-        `Triggered at ${new Date().toISOString()}\n`,
-        "chore: trigger initial Vercel deploy",
-      );
-    } catch (e) {
-      if (e instanceof GitHubApiError) {
-        throw new Error(`Couldn't push trigger commit: ${e.message}`);
+    project = await createProject(session.token, fullConfig);
+  } catch (e) {
+    const exists =
+      e instanceof VercelApiError &&
+      (e.status === 409 || /already exists|conflict/i.test(e.message));
+    if (exists) {
+      // A previous attempt created it (e.g. the trigger commit failed and the
+      // user retried). Reuse it instead of erroring on the taken name.
+      try {
+        project = await getProject(session.token, config.projectName, teamId);
+      } catch (e2) {
+        return fail("create", e2);
       }
-      throw e;
+    } else {
+      return fail("create", e);
     }
+  }
 
-    // Poll for the deployment to appear — webhook delivery is async.
-    let deployment = null;
-    for (let i = 0; i < 30; i++) {
-      deployment = await latestDeployment(
-        session.token,
-        project.id,
-        session.teamId ?? undefined,
-      );
-      if (deployment) break;
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-
-    return NextResponse.json({
+  // ── Stage 2: trigger the build via a commit to the fork ───────────────────
+  // Integration OAuth tokens can't reliably trigger production deploys through
+  // /v13/deployments, so we push a tiny commit and let Vercel's webhook build
+  // with the project's own permissions. The project already exists here, so on
+  // failure we keep it (and return its id) rather than losing the link.
+  try {
+    await commitFile(
+      gh.token,
+      config.githubRepo,
+      ".vercel-deploy-trigger",
+      `Triggered at ${new Date().toISOString()}\n`,
+      "chore: trigger initial Vercel deploy",
+    );
+  } catch (e) {
+    return fail("trigger", e, {
       projectId: project.id,
       projectName: project.name,
       teamId: session.teamId,
-      deployment,
     });
-  } catch (e) {
-    // Roll back the orphaned project so the next attempt can reuse the name.
-    if (createdProjectId) {
-      try {
-        await deleteProject(
-          session.token,
-          createdProjectId,
-          session.teamId ?? undefined,
-        );
-      } catch {}
-    }
-    if (e instanceof VercelApiError) {
-      return NextResponse.json(
-        { error: e.message, code: e.code, rolledBack: !!createdProjectId },
-        { status: e.status },
-      );
-    }
-    return NextResponse.json(
-      {
-        error: e instanceof Error ? e.message : "Unknown error",
-        rolledBack: !!createdProjectId,
-      },
-      { status: 500 },
-    );
   }
+
+  // ── Poll for the webhook-triggered deployment to appear ───────────────────
+  // It may not arrive within the window; that's fine — the client keeps polling
+  // by projectId and never treats a missing deployment as a hard failure.
+  let deployment = null;
+  for (let i = 0; i < 30; i++) {
+    deployment = await latestDeployment(session.token, project.id, teamId);
+    if (deployment) break;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+
+  return NextResponse.json({
+    projectId: project.id,
+    projectName: project.name,
+    teamId: session.teamId,
+    deployment,
+  });
 }
