@@ -203,7 +203,7 @@ export default function Home() {
           fork: !forkedRepo,
           name: !!validateProjectName(projectName) || nameStatus !== "ok",
           token: !!validateTokenAddress(env.NEXT_PUBLIC_DAO_TOKEN_ADDRESS),
-          walletconnect: !env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID,
+          // walletconnect is optional (#4) — Enter always advances.
         };
         const advancable = [
           "welcome",
@@ -402,11 +402,10 @@ export default function Home() {
   const setEnvField = (k: EnvKey, v: string) =>
     setEnv((s) => ({ ...s, [k]: v }));
 
+  // WalletConnect is deferrable (#4) — the site deploys without it; wallet
+  // actions are just disabled until the ID is added.
   const canLaunch =
-    projectName &&
-    forkedRepo &&
-    env.NEXT_PUBLIC_DAO_TOKEN_ADDRESS &&
-    env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID;
+    projectName && forkedRepo && env.NEXT_PUBLIC_DAO_TOKEN_ADDRESS;
 
   return (
     <div className="relative min-h-screen overflow-hidden text-neutral-900 dark:text-white">
@@ -541,7 +540,6 @@ export default function Home() {
             <InputScreen
               number={qn(flow, "walletconnect")}
               question="WalletConnect Project ID?"
-              hint="Free at cloud.reown.com — paste your project ID here."
               value={env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID}
               onChange={(v) =>
                 setEnvField("NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID", v)
@@ -549,6 +547,9 @@ export default function Home() {
               placeholder="0123abcd…"
               onNext={next}
               canNext={Boolean(env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID)}
+              optional
+              skipLabel="I'll add it later"
+              aside={<WalletConnectHelp />}
             />
           )}
           {screen === "advanced-prompt" && (
@@ -635,11 +636,15 @@ export default function Home() {
               forkedRepo={forkedRepo}
               chainId={env.NEXT_PUBLIC_CHAIN_ID}
               token={env.NEXT_PUBLIC_DAO_TOKEN_ADDRESS}
+              walletConnectSet={Boolean(
+                env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID,
+              )}
               vercelUsername={me?.vercel.username}
               ghLogin={me?.github.login}
               canLaunch={Boolean(canLaunch)}
               deploying={deploying}
               onLaunch={deploy}
+              onEditWalletConnect={() => setScreen("walletconnect")}
               onEditVercel={() => disconnect("vercel")}
               onEditGithub={() => disconnect("github")}
             />
@@ -860,6 +865,8 @@ function InputScreen({
   password,
   error,
   statusBadge,
+  aside,
+  skipLabel,
 }: {
   number: number;
   question: string;
@@ -873,6 +880,8 @@ function InputScreen({
   password?: boolean;
   error?: string | null;
   statusBadge?: React.ReactNode;
+  aside?: React.ReactNode;
+  skipLabel?: string;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [touched, setTouched] = useState(false);
@@ -884,6 +893,7 @@ function InputScreen({
   return (
     <div>
       <QuestionHeader number={number} title={question} hint={hint} />
+      {aside && <div className="mb-5">{aside}</div>}
       <div className="relative">
         <input
           ref={ref}
@@ -918,13 +928,44 @@ function InputScreen({
             onClick={onNext}
             className="text-base text-neutral-500 hover:text-(--foreground)"
           >
-            Skip
+            {skipLabel ?? "Skip"}
           </button>
         )}
         <span className="text-sm text-neutral-600">
           press <Kbd>Enter</Kbd>
         </span>
       </div>
+    </div>
+  );
+}
+
+function WalletConnectHelp() {
+  return (
+    <div className="rounded-xl border border-black/10 dark:border-white/10 bg-white/50 dark:bg-black/20 p-4 text-sm text-neutral-700 dark:text-neutral-300">
+      <p>
+        This powers <b>wallet connect/disconnect</b> and every on-chain write
+        action on your site — voting, proposing, settling auctions. Without it,
+        those buttons won&apos;t work. It&apos;s free, and you can add it now or
+        later in your Vercel project settings.
+      </p>
+      <a
+        href="https://cloud.reown.com"
+        target="_blank"
+        rel="noreferrer"
+        className="mt-3 inline-flex items-center gap-1 text-blue-700 hover:underline dark:text-blue-300"
+      >
+        Create a free project at Reown Cloud ↗
+      </a>
+      <details className="mt-3">
+        <summary className="cursor-pointer text-neutral-500 hover:text-(--foreground)">
+          Where do I find the Project ID?
+        </summary>
+        <p className="mt-2 text-neutral-500">
+          Sign in to Reown Cloud → <b>Create Project</b> (type: AppKit) → copy
+          the <b>Project ID</b> from the project&apos;s dashboard. It&apos;s a
+          ~32-character hex string.
+        </p>
+      </details>
     </div>
   );
 }
@@ -1211,11 +1252,13 @@ function ReviewScreen({
   forkedRepo,
   chainId,
   token,
+  walletConnectSet,
   vercelUsername,
   ghLogin,
   canLaunch,
   deploying,
   onLaunch,
+  onEditWalletConnect,
   onEditVercel,
   onEditGithub,
 }: {
@@ -1223,11 +1266,13 @@ function ReviewScreen({
   forkedRepo: string;
   chainId: string;
   token: string;
+  walletConnectSet: boolean;
   vercelUsername?: string;
   ghLogin?: string;
   canLaunch: boolean;
   deploying: boolean;
   onLaunch: () => void;
+  onEditWalletConnect: () => void;
   onEditVercel: () => void;
   onEditGithub: () => void;
 }) {
@@ -1243,6 +1288,21 @@ function ReviewScreen({
         <Row label="Chain">{chain?.label ?? chainId}</Row>
         <Row label="Token">
           <code className="text-neutral-700 dark:text-neutral-300">{shortAddr(token)}</code>
+        </Row>
+        <Row label="WalletConnect">
+          {walletConnectSet ? (
+            <span className="text-blue-600 dark:text-blue-400">✓ Configured</span>
+          ) : (
+            <span className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+              ⚠ Wallet actions disabled
+              <button
+                onClick={onEditWalletConnect}
+                className="text-sm text-neutral-500 hover:text-(--foreground)"
+              >
+                add
+              </button>
+            </span>
+          )}
         </Row>
         <Row label="Vercel">
           <span className="flex items-center gap-2">
