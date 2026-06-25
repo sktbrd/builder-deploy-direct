@@ -78,7 +78,17 @@ export default function Home() {
   const [bridgeHint, setBridgeHint] = useState<string | null>(null);
   const [deployment, setDeployment] = useState<Deployment | null>(null);
   const [deployedProject, setDeployedProject] = useState<string>("");
+  const [deployedProjectId, setDeployedProjectId] = useState<string>("");
+  const [slowBuild, setSlowBuild] = useState(false);
+  const [bridgeChecking, setBridgeChecking] = useState(false);
+  const [bridgeWarning, setBridgeWarning] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Mirror the latest deployment into a ref so the polling interval can read
+  // the current deployment id without re-subscribing every tick.
+  const deploymentRef = useRef<Deployment | null>(null);
+  useEffect(() => {
+    deploymentRef.current = deployment;
+  }, [deployment]);
 
   // Build the ordered flow based on current state.
   const flow = useMemo<ScreenId[]>(() => {
@@ -246,6 +256,34 @@ export default function Home() {
     }
   };
 
+  const proceedFromBridge = () => {
+    setBridgeWarning(null);
+    setBridgeConfirmed(true);
+    setTimeout(() => setScreen("name"), 50);
+  };
+
+  // Verify Vercel actually has access to the user's GitHub before advancing.
+  // If the integration isn't installed yet we warn but still let them force on.
+  const confirmBridge = async () => {
+    setBridgeChecking(true);
+    setBridgeWarning(null);
+    try {
+      const res = await fetch("/api/vercel/check-github");
+      const data = await res.json();
+      if (res.ok && data.hasBridge === false) {
+        setBridgeWarning(
+          `Vercel can't see @${data.ghLogin ?? "your GitHub"} yet. Finish installing the Vercel GitHub app, then click again — or continue anyway.`,
+        );
+        setBridgeChecking(false);
+        return;
+      }
+    } catch {
+      // Network/verification hiccup — don't block the user on it.
+    }
+    setBridgeChecking(false);
+    proceedFromBridge();
+  };
+
   const deploy = async () => {
     setDeploying(true);
     setError(null);
@@ -276,8 +314,11 @@ export default function Home() {
         throw new Error(data.error || "Deploy failed");
       }
       setDeployedProject(data.projectName);
+      setDeployedProjectId(data.projectId);
       setDeployment(data.deployment ?? null);
-      if (!data.deployment) setScreen("done");
+      // Stay on "building". The poller below takes over and will discover the
+      // deployment by projectId even if the webhook build hasn't appeared yet,
+      // then advance to "done" only once it's actually READY (with a URL).
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
       setScreen("error");
@@ -287,19 +328,33 @@ export default function Home() {
   };
 
   useEffect(() => {
-    if (previewTarget || screen !== "building" || !deployment) return;
+    if (previewTarget || screen !== "building" || !deployedProjectId) return;
+    let attempts = 0;
+    setSlowBuild(false);
     const poll = async () => {
+      attempts++;
+      // ~30s with no resolution → surface a "taking longer" hint, but keep
+      // polling. Webhook-triggered first builds can be slow to appear.
+      if (attempts >= 10) setSlowBuild(true);
       try {
+        const id = deploymentRef.current?.uid;
         const res = await fetch("/api/status", {
           method: "POST",
-          body: JSON.stringify({ deploymentId: deployment.uid }),
+          body: JSON.stringify(
+            id ? { deploymentId: id } : { projectId: deployedProjectId },
+          ),
         });
         const data = await res.json();
         if (data.deployment) {
           setDeployment(data.deployment);
-          if (data.deployment.readyState === "READY") setScreen("done");
-          if (data.deployment.readyState === "ERROR") {
-            setError("Build failed. Check the inspector for details.");
+          const state = data.deployment.readyState;
+          if (state === "READY") setScreen("done");
+          if (state === "ERROR" || state === "CANCELED") {
+            setError(
+              state === "CANCELED"
+                ? "The build was canceled."
+                : "Build failed. Check the inspector for details.",
+            );
             setScreen("error");
           }
         }
@@ -307,11 +362,12 @@ export default function Home() {
         // transient network error — keep polling
       }
     };
+    poll();
     pollRef.current = setInterval(poll, 3000);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [screen, deployment]);
+  }, [screen, deployedProjectId]);
 
   const setEnvField = (k: EnvKey, v: string) =>
     setEnv((s) => ({ ...s, [k]: v }));
@@ -381,10 +437,10 @@ export default function Home() {
           {screen === "vercel-bridge" && (
             <BridgeScreen
               number={qn(flow, "vercel-bridge")}
-              onConfirm={() => {
-                setBridgeConfirmed(true);
-                setTimeout(() => setScreen("name"), 50);
-              }}
+              checking={bridgeChecking}
+              warning={bridgeWarning}
+              onConfirm={confirmBridge}
+              onForce={proceedFromBridge}
             />
           )}
           {screen === "name" && (
@@ -556,7 +612,9 @@ export default function Home() {
               onEditGithub={() => disconnect("github")}
             />
           )}
-          {screen === "building" && <BuildingScreen deployment={deployment} />}
+          {screen === "building" && (
+            <BuildingScreen deployment={deployment} slow={slowBuild} />
+          )}
           {screen === "done" && (
             <DoneScreen
               projectName={deployedProject || projectName}
@@ -565,6 +623,8 @@ export default function Home() {
                 setScreen("welcome");
                 setDeployment(null);
                 setDeployedProject("");
+                setDeployedProjectId("");
+                setSlowBuild(false);
                 setForkedRepo("");
                 setForkedRepoId(undefined);
               }}
@@ -575,8 +635,10 @@ export default function Home() {
               error={error}
               bridgeHint={bridgeHint}
               debugUrl={
-                projectName && forkedRepo
-                  ? `/api/debug?project=${encodeURIComponent(projectName)}&repo=${encodeURIComponent(forkedRepo)}${forkedRepoId ? `&repoId=${forkedRepoId}` : ""}`
+                process.env.NODE_ENV === "development" &&
+                projectName &&
+                forkedRepo
+                  ? `/api/debug?project=${encodeURIComponent(projectName)}`
                   : null
               }
               onRetry={() => {
@@ -844,10 +906,16 @@ function NameStatusBadge({ status }: { status: NameStatus }) {
 
 function BridgeScreen({
   number,
+  checking,
+  warning,
   onConfirm,
+  onForce,
 }: {
   number: number;
+  checking: boolean;
+  warning: string | null;
   onConfirm: () => void;
+  onForce: () => void;
 }) {
   const [opened, setOpened] = useState(false);
   return (
@@ -880,21 +948,36 @@ function BridgeScreen({
         </span>
       </a>
       <div className="mt-6 flex items-center gap-4">
-        <button onClick={onConfirm} className={ok}>
-          I&apos;ve installed it →
+        <button onClick={onConfirm} disabled={checking} className={ok}>
+          {checking ? (
+            <span className="flex items-center gap-2">
+              <Spinner /> Checking…
+            </span>
+          ) : (
+            <>I&apos;ve installed it →</>
+          )}
         </button>
-        <button
-          onClick={onConfirm}
-          className="text-base text-neutral-500 hover:text-(--foreground)"
-        >
-          Already done, skip
-        </button>
+        {warning && (
+          <button
+            onClick={onForce}
+            className="text-base text-neutral-500 hover:text-(--foreground)"
+          >
+            Continue anyway
+          </button>
+        )}
       </div>
-      {opened && (
-        <div className="mt-4 text-sm text-neutral-500">
-          Once you&apos;ve installed it on GitHub, come back here and click
-          &ldquo;I&apos;ve installed it&rdquo;.
+      {warning ? (
+        <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+          {warning}
         </div>
+      ) : (
+        opened && (
+          <div className="mt-4 text-sm text-neutral-500">
+            Once you&apos;ve installed it on GitHub, come back here and click
+            &ldquo;I&apos;ve installed it&rdquo; — we&apos;ll verify access
+            before continuing.
+          </div>
+        )
       )}
     </div>
   );
@@ -1131,7 +1214,13 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-function BuildingScreen({ deployment }: { deployment: Deployment | null }) {
+function BuildingScreen({
+  deployment,
+  slow,
+}: {
+  deployment: Deployment | null;
+  slow: boolean;
+}) {
   const state = deployment?.readyState ?? "QUEUED";
   const labels: Record<string, string> = {
     QUEUED: "Queued",
@@ -1141,6 +1230,11 @@ function BuildingScreen({ deployment }: { deployment: Deployment | null }) {
     ERROR: "Failed",
     CANCELED: "Canceled",
   };
+  // Before the webhook build appears we have no deployment yet — say so
+  // honestly rather than implying the build is already running.
+  const heading = deployment
+    ? `${labels[state] ?? state}…`
+    : "Starting your deployment…";
   return (
     <div className="text-center">
       <div className="mx-auto mb-8 flex h-20 w-20 items-center justify-center">
@@ -1150,25 +1244,39 @@ function BuildingScreen({ deployment }: { deployment: Deployment | null }) {
         </div>
       </div>
       <h2 className="bg-gradient-to-b from-neutral-900 to-neutral-500 dark:from-white bg-clip-text text-3xl font-semibold tracking-tight text-transparent">
-        {labels[state] ?? state}…
+        {heading}
       </h2>
       <p className="mt-3 text-base text-neutral-600 dark:text-neutral-400">
-        Your DAO site is being built. This usually takes about 60 seconds.
+        {deployment
+          ? "Your DAO site is being built. This usually takes about 60 seconds."
+          : "We've kicked off the build on GitHub — waiting for Vercel to pick it up."}
       </p>
-      {deployment && (
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3 text-sm">
-          {deployment.inspectorUrl && (
-            <a
-              href={deployment.inspectorUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:hover:bg-white/10"
-            >
-              Build logs ↗
-            </a>
-          )}
-        </div>
+      {slow && (
+        <p className="mx-auto mt-3 max-w-md text-sm text-amber-700 dark:text-amber-300">
+          This is taking a little longer than usual. We&apos;re still watching —
+          you can also follow along in your Vercel dashboard.
+        </p>
       )}
+      <div className="mt-8 flex flex-wrap items-center justify-center gap-3 text-sm">
+        {deployment?.inspectorUrl && (
+          <a
+            href={deployment.inspectorUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:hover:bg-white/10"
+          >
+            Build logs ↗
+          </a>
+        )}
+        <a
+          href="https://vercel.com/dashboard/projects"
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:hover:bg-white/10"
+        >
+          Open in Vercel ↗
+        </a>
+      </div>
     </div>
   );
 }

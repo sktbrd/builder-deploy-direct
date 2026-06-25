@@ -1,34 +1,33 @@
 # Builder Deploy Direct
 
-The "Option B" companion to [builder-launchpad](https://github.com/sktbrd/builder-launchpad).
-
-This one deploys [sktbrd/builder-template-app](https://github.com/sktbrd/builder-template-app) **straight to the user's Vercel account via the API** — no copy-paste, no roundtrip to Vercel's UI. The user pastes a Vercel API token, fills the config, hits Deploy, and watches the build progress live.
-
----
-
-## A vs B — pick what fits
-
-| | [builder-launchpad](https://github.com/sktbrd/builder-launchpad) (A) | **builder-deploy-direct (B)** |
-|---|---|---|
-| Backend required | No | Yes (Next.js API routes) |
-| User authenticates with Vercel | Yes, on vercel.com | Yes, via API token in our form |
-| Env values pre-filled | ❌ user pastes a copy block | ✅ written via Vercel API |
-| Deploy progress in our UI | ❌ user watches on vercel.com | ✅ live polled status |
-| Prerequisites for user | Vercel account | Vercel account **+ a fork of the template in their own GitHub** |
-| Complexity | A page of form code | Form + API routes + polling |
-
-If you don't need pre-fill, A is leaner. If you want the full one-form-and-done UX, use B.
+A no-code launcher that deploys [sktbrd/builder-template-app](https://github.com/sktbrd/builder-template-app) — a [Builder DAO](https://nouns.build) front-end — straight into a user's **own GitHub + Vercel accounts**. The user authorizes both providers via OAuth, fills in their DAO config, and watches the build go live, all without leaving the page.
 
 ---
 
 ## How it works
 
-1. **Connect** — user generates a Vercel API token at `vercel.com/account/settings/tokens` and pastes it. We hit `GET /v2/user` to validate and `GET /v2/teams` to populate the team selector.
-2. **Configure** — user picks Vercel team, project name, GitHub fork URL, and the DAO config (chain, DAO addr, WalletConnect/Alchemy/Pinata keys).
-3. **Deploy** — server calls `POST /v11/projects` with `gitRepository` + `environmentVariables` in one shot. Vercel auto-creates a deployment from the linked repo.
-4. **Watch** — we poll `GET /v13/deployments/{id}` every 3s, surface the inspector URL while building, and the live `https://*.vercel.app` URL when ready.
+The whole flow is a single client-side wizard ([`app/page.tsx`](app/page.tsx)) backed by a handful of Next.js API routes. The set of steps is assembled dynamically based on what's already connected.
 
-All Vercel calls go through [`lib/vercel.ts`](lib/vercel.ts); routes live in [`app/api/`](app/).
+1. **Connect Vercel** — OAuth via the Vercel integration. `/api/vercel/install` → Vercel → `/api/vercel/callback`. The access token is stored in an **httpOnly** cookie (never reaches client JS); a separate non-httpOnly cookie holds display info (username, team).
+2. **Connect GitHub** — OAuth App flow (`public_repo read:user`). `/api/github/install` → GitHub → `/api/github/callback`. Same cookie split.
+3. **Bridge** — the user installs the Vercel GitHub app so Vercel can read their fork. We verify access via `/api/vercel/check-github` before continuing (with a "continue anyway" escape hatch).
+4. **Fork** — `/api/github/fork` calls `POST /repos/{template}/forks` into the user's account, reusing an existing fork if present, polling until GitHub finishes creating it.
+5. **Configure** — project name (debounced availability check), chain, DAO token address, WalletConnect ID, plus optional Alchemy / Pinata / site-URL.
+6. **Deploy** — see below.
+7. **Watch** — the client polls until the deployment is `READY`, then shows the live URL.
+
+All Vercel calls go through [`lib/vercel.ts`](lib/vercel.ts); GitHub through [`lib/github.ts`](lib/github.ts). OAuth CSRF `state` is signed/verified in [`lib/oauth-state.ts`](lib/oauth-state.ts).
+
+### The deploy step (the important bit)
+
+`/api/deploy` does **two** things:
+
+1. `POST /v11/projects` — creates the Vercel project, linked to the fork, with all env vars written as `encrypted`.
+2. **Pushes a tiny commit** (`.vercel-deploy-trigger`) to the fork's `main` using the user's GitHub token.
+
+Why the commit instead of `POST /v13/deployments`? Integration OAuth tokens don't reliably have permission to trigger production deployments through the deployments API. Pushing a commit makes Vercel's own GitHub webhook fire the build with the **project's** full permissions. The server then polls for the deployment to appear and returns it.
+
+Because the webhook round-trip is async, the deployment often hasn't materialized by the time `/api/deploy` returns. The client handles this by polling `/api/status` **by `projectId`** until a deployment exists, then by its `uid` until `READY` — so the final live URL always shows up, even on a slow first build. On failure, the orphaned project is rolled back so the name can be reused.
 
 ---
 
@@ -36,17 +35,22 @@ All Vercel calls go through [`lib/vercel.ts`](lib/vercel.ts); routes live in [`a
 
 ```bash
 pnpm install
+cp .env.example .env.local   # then fill in the values (see below)
 pnpm dev
 ```
 
-Open <http://localhost:3000>. No env vars required for the launchpad itself.
+Open <http://localhost:3000>.
 
-### Testing end-to-end
+### Required environment variables
 
-1. Fork `sktbrd/builder-template-app` into your own GitHub.
-2. In Vercel, ensure GitHub is connected (Account → Integrations → GitHub).
-3. Generate a token at <https://vercel.com/account/settings/tokens>.
-4. Run the form and deploy.
+See [`.env.example`](.env.example) for the full list with links. In short you need:
+
+- A **GitHub OAuth App** → `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_REDIRECT_URI`
+- A **Vercel integration** → `VERCEL_CLIENT_ID`, `VERCEL_CLIENT_SECRET`, `VERCEL_REDIRECT_URI`, `VERCEL_INTEGRATION_SLUG`
+- `TEMPLATE_REPO` (e.g. `sktbrd/builder-template-app`)
+- `OAUTH_STATE_SECRET` (random; `openssl rand -hex 32`)
+
+Each provider's configured callback/redirect URL must match the matching `*_REDIRECT_URI` value exactly.
 
 ---
 
@@ -54,45 +58,44 @@ Open <http://localhost:3000>. No env vars required for the launchpad itself.
 
 ```
 app/
-  layout.tsx
-  page.tsx               — multi-step form + deploy progress UI
-  globals.css
+  page.tsx                     — the entire wizard UI + polling logic
   api/
-    validate/route.ts    — POST: validates token, returns user + teams
-    deploy/route.ts      — POST: creates project + initial deployment
-    status/route.ts      — POST: polls deployment status
+    vercel/install,callback    — Vercel OAuth (state-signed)
+    vercel/check-github        — verifies Vercel can see the user's GitHub
+    vercel/check-name          — project-name availability
+    github/install,callback    — GitHub OAuth (state-signed)
+    github/fork                — forks the template into the user's account
+    deploy                     — creates project + triggers build via commit
+    status                     — polls a deployment by id or projectId
+    me / logout                — session read / clear
+    debug                      — read-only diagnostics (dev only)
 lib/
-  config.ts              — env keys, chain options, DeployConfig type
-  vercel.ts              — thin Vercel API client (validate, createProject, latestDeployment, getDeployment)
+  config.ts                    — env keys, chain options, DeployConfig
+  vercel.ts                    — Vercel API client
+  github.ts                    — GitHub API client
+  oauth-state.ts               — signed CSRF state
+  redirect.ts                  — same-origin redirect guard
+  session.ts                   — cookie session readers
 ```
 
 ---
 
 ## Security notes
 
-- **The Vercel token never persists.** It lives in the client component's state and is sent to `/api/*` on each request. No cookies, no DB. Closing the tab forgets it.
-- **The server routes use the token as a bearer credential** — they don't store, log, or proxy it elsewhere. Audit `lib/vercel.ts` and the three API routes; that's the entire surface area.
-- For a hosted version with multiple users, you'd want to encrypt the token at rest, add CSRF protection on the API routes, and consider migrating to the OAuth flow (below) so users never paste a raw token.
+- **Tokens live in httpOnly cookies**, never in client JS. Logout (`/api/logout`) clears them.
+- **OAuth `state` is HMAC-signed** with a TTL. GitHub callbacks require valid state; Vercel callbacks reject an *invalid* state but tolerate a *missing* one (some install flows don't forward it) — so a forged callback is always blocked, but users can't get locked out.
+- **Redirects are same-origin only** (`lib/redirect.ts`) — no open-redirect via `next`.
+- **`/api/debug` is disabled in production** and performs no side effects (it only reads).
+- The GitHub OAuth scope `public_repo` grants write to all of the user's public repos — a known limitation of OAuth Apps. A GitHub App would allow per-repo scoping.
 
 ---
 
-## Known limitations (and the v2 upgrade paths)
+## Known limitations / future work
 
-### 1. User must fork the template manually
-
-Vercel's API can link a project to a Git repo it already has access to — it can't fork on the user's behalf. **Fix:** add a GitHub OAuth flow + `POST /repos/{owner}/{repo}/forks` step before the Vercel step. Then the user only authenticates twice (GitHub, Vercel) instead of forking manually.
-
-### 2. PAT instead of Vercel OAuth
-
-Pasting an API token is fine for self-hosted/dev use; not great for a public hosted launcher. **Fix:** register a Vercel Integration, implement the OAuth code-exchange callback, swap `/api/validate` for `/api/auth/vercel/callback`. The rest of the API routes stay identical — they just get a token from the session instead of the request body.
-
-### 3. No deployment cancellation / rollback UI
-
-The polling shows status but doesn't let the user cancel. **Fix:** add `POST /v12/deployments/{id}/cancel` behind a button.
-
-### 4. Single template hard-coded
-
-Currently expects a Nouns Builder-shaped env. **Fix:** parse `sample.env` from the user-provided repo at validate time and render fields dynamically.
+- **PAT-free, but broad scope.** Migrating from a GitHub OAuth App to a GitHub App would let users grant access to only the forked repo.
+- **No cancel/rollback UI** during a build (`POST /v12/deployments/{id}/cancel` could power one).
+- **Single template.** The env fields are hard-coded for the Builder template; parsing `sample.env` from the fork would make it generic.
+- **`.vercel-deploy-trigger`** is left in the fork after deploy.
 
 ---
 

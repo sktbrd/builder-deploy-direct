@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { exchangeGhCode, getGhUser, GitHubApiError } from "@/lib/github";
 import { verifyState } from "@/lib/oauth-state";
+import { safeNext } from "@/lib/redirect";
 
 export const runtime = "nodejs";
 
@@ -40,9 +41,7 @@ export async function GET(req: Request) {
     });
     const user = await getGhUser(tok.access_token);
 
-    const res = NextResponse.redirect(
-      next ? new URL(next, url.origin) : new URL("/", url.origin),
-    );
+    const res = NextResponse.redirect(new URL(safeNext(next), url.origin));
     const isProd = process.env.NODE_ENV === "production";
     const cookieOpts = {
       httpOnly: true,

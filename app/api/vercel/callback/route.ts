@@ -1,16 +1,33 @@
 import { NextResponse } from "next/server";
 import { exchangeCode, validateToken, VercelApiError } from "@/lib/vercel";
+import { verifyState } from "@/lib/oauth-state";
+import { safeNext } from "@/lib/redirect";
 
 export const runtime = "nodejs";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
-  const next = url.searchParams.get("next");
+  const stateParam = url.searchParams.get("state");
   const teamIdParam = url.searchParams.get("teamId");
 
   if (!code) {
     return NextResponse.json({ error: "Missing code" }, { status: 400 });
+  }
+
+  // Soft-fail CSRF check: a *present but invalid* state is always rejected,
+  // but a totally missing state is allowed (some Vercel install flows may not
+  // forward it) so we never lock users out of connecting.
+  let next: string | null = null;
+  if (stateParam) {
+    const stateCheck = verifyState(stateParam);
+    if (!stateCheck.ok) {
+      return NextResponse.json(
+        { error: `Invalid state (${stateCheck.reason})` },
+        { status: 400 },
+      );
+    }
+    next = stateCheck.next ?? null;
   }
 
   const clientId = process.env.VERCEL_CLIENT_ID;
@@ -32,9 +49,7 @@ export async function GET(req: Request) {
     });
     const me = await validateToken(tok.access_token);
 
-    const res = NextResponse.redirect(
-      next ? new URL(next, url.origin) : new URL("/", url.origin),
-    );
+    const res = NextResponse.redirect(new URL(safeNext(next), url.origin));
     const isProd = process.env.NODE_ENV === "production";
     // 30-day session. Cookie is httpOnly so the token never reaches client JS.
     const cookieOpts = {
