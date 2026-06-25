@@ -18,13 +18,22 @@ export async function GET() {
       vercel.token,
       vercel.teamId ?? undefined,
     );
-    const matched = namespaces.find(
-      (n) => n.provider === "github" && n.slug.toLowerCase() === gh.login.toLowerCase(),
+    const githubNs = namespaces.filter((n) => n.provider === "github");
+    const matched = githubNs.find(
+      (n) => n.slug.toLowerCase() === gh.login.toLowerCase(),
     );
+    // Distinguish the failure modes so the UI can give a targeted fix.
+    const reason = matched
+      ? "ok"
+      : githubNs.length === 0
+        ? "no-github" // Vercel has no GitHub connection at all
+        : "wrong-account"; // connected, but not to the account/org with the fork
     return NextResponse.json({
       hasBridge: Boolean(matched),
-      namespaces: namespaces.map((n) => ({ slug: n.slug, provider: n.provider })),
+      reason,
       ghLogin: gh.login,
+      githubNamespaces: githubNs.map((n) => n.slug),
+      namespaces: namespaces.map((n) => ({ slug: n.slug, provider: n.provider })),
     });
   } catch (e) {
     if (e instanceof VercelApiError) {

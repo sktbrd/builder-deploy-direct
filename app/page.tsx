@@ -86,6 +86,7 @@ export default function Home() {
   const [deployBridge, setDeployBridge] = useState(false);
   const [bridgeChecking, setBridgeChecking] = useState(false);
   const [bridgeWarning, setBridgeWarning] = useState<string | null>(null);
+  const [bridgeNamespaces, setBridgeNamespaces] = useState<string[]>([]);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Mirror the latest deployment into a ref so the polling interval can read
   // the current deployment id without re-subscribing every tick.
@@ -202,7 +203,7 @@ export default function Home() {
           fork: !forkedRepo,
           name: !!validateProjectName(projectName) || nameStatus !== "ok",
           token: !!validateTokenAddress(env.NEXT_PUBLIC_DAO_TOKEN_ADDRESS),
-          walletconnect: !env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID,
+          // walletconnect is optional (#4) — Enter always advances.
         };
         const advancable = [
           "welcome",
@@ -267,22 +268,33 @@ export default function Home() {
   };
 
   // Verify Vercel actually has access to the user's GitHub before advancing.
-  // If the integration isn't installed yet we warn but still let them force on.
+  // On a clear "not connected" answer we block with a targeted reason; on a
+  // network/permission hiccup we don't hard-block (warn + allow force on).
   const confirmBridge = async () => {
     setBridgeChecking(true);
     setBridgeWarning(null);
+    setBridgeNamespaces([]);
     try {
       const res = await fetch("/api/vercel/check-github");
       const data = await res.json();
-      if (res.ok && data.hasBridge === false) {
+      if (res.ok && data.hasBridge) {
+        setBridgeChecking(false);
+        proceedFromBridge();
+        return;
+      }
+      if (res.ok) {
+        const login = data.ghLogin ?? "your GitHub";
+        setBridgeNamespaces(data.githubNamespaces ?? []);
         setBridgeWarning(
-          `Vercel can't see @${data.ghLogin ?? "your GitHub"} yet. Finish installing the Vercel GitHub app, then click again — or continue anyway.`,
+          data.reason === "no-github"
+            ? `Vercel isn't connected to any GitHub account yet. Install the Vercel GitHub app on @${login} (the account that has your fork), then check again.`
+            : `Vercel is connected to GitHub, but not to @${login}. Install/configure the Vercel GitHub app on the account or org that holds your fork, then check again.`,
         );
         setBridgeChecking(false);
         return;
       }
     } catch {
-      // Network/verification hiccup — don't block the user on it.
+      // Verification itself failed — don't block on it.
     }
     setBridgeChecking(false);
     proceedFromBridge();
@@ -390,11 +402,10 @@ export default function Home() {
   const setEnvField = (k: EnvKey, v: string) =>
     setEnv((s) => ({ ...s, [k]: v }));
 
+  // WalletConnect is deferrable (#4) — the site deploys without it; wallet
+  // actions are just disabled until the ID is added.
   const canLaunch =
-    projectName &&
-    forkedRepo &&
-    env.NEXT_PUBLIC_DAO_TOKEN_ADDRESS &&
-    env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID;
+    projectName && forkedRepo && env.NEXT_PUBLIC_DAO_TOKEN_ADDRESS;
 
   return (
     <div className="relative min-h-screen overflow-hidden text-neutral-900 dark:text-white">
@@ -455,8 +466,10 @@ export default function Home() {
           {screen === "vercel-bridge" && (
             <BridgeScreen
               number={qn(flow, "vercel-bridge")}
+              ghLogin={me?.github.login}
               checking={bridgeChecking}
               warning={bridgeWarning}
+              namespaces={bridgeNamespaces}
               onConfirm={confirmBridge}
               onForce={proceedFromBridge}
             />
@@ -527,7 +540,6 @@ export default function Home() {
             <InputScreen
               number={qn(flow, "walletconnect")}
               question="WalletConnect Project ID?"
-              hint="Free at cloud.reown.com — paste your project ID here."
               value={env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID}
               onChange={(v) =>
                 setEnvField("NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID", v)
@@ -535,6 +547,9 @@ export default function Home() {
               placeholder="0123abcd…"
               onNext={next}
               canNext={Boolean(env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID)}
+              optional
+              skipLabel="I'll add it later"
+              aside={<WalletConnectHelp />}
             />
           )}
           {screen === "advanced-prompt" && (
@@ -621,11 +636,15 @@ export default function Home() {
               forkedRepo={forkedRepo}
               chainId={env.NEXT_PUBLIC_CHAIN_ID}
               token={env.NEXT_PUBLIC_DAO_TOKEN_ADDRESS}
+              walletConnectSet={Boolean(
+                env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID,
+              )}
               vercelUsername={me?.vercel.username}
               ghLogin={me?.github.login}
               canLaunch={Boolean(canLaunch)}
               deploying={deploying}
               onLaunch={deploy}
+              onEditWalletConnect={() => setScreen("walletconnect")}
               onEditVercel={() => disconnect("vercel")}
               onEditGithub={() => disconnect("github")}
             />
@@ -846,6 +865,8 @@ function InputScreen({
   password,
   error,
   statusBadge,
+  aside,
+  skipLabel,
 }: {
   number: number;
   question: string;
@@ -859,6 +880,8 @@ function InputScreen({
   password?: boolean;
   error?: string | null;
   statusBadge?: React.ReactNode;
+  aside?: React.ReactNode;
+  skipLabel?: string;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [touched, setTouched] = useState(false);
@@ -870,6 +893,7 @@ function InputScreen({
   return (
     <div>
       <QuestionHeader number={number} title={question} hint={hint} />
+      {aside && <div className="mb-5">{aside}</div>}
       <div className="relative">
         <input
           ref={ref}
@@ -904,13 +928,44 @@ function InputScreen({
             onClick={onNext}
             className="text-base text-neutral-500 hover:text-(--foreground)"
           >
-            Skip
+            {skipLabel ?? "Skip"}
           </button>
         )}
         <span className="text-sm text-neutral-600">
           press <Kbd>Enter</Kbd>
         </span>
       </div>
+    </div>
+  );
+}
+
+function WalletConnectHelp() {
+  return (
+    <div className="rounded-xl border border-black/10 dark:border-white/10 bg-white/50 dark:bg-black/20 p-4 text-sm text-neutral-700 dark:text-neutral-300">
+      <p>
+        This powers <b>wallet connect/disconnect</b> and every on-chain write
+        action on your site — voting, proposing, settling auctions. Without it,
+        those buttons won&apos;t work. It&apos;s free, and you can add it now or
+        later in your Vercel project settings.
+      </p>
+      <a
+        href="https://cloud.reown.com"
+        target="_blank"
+        rel="noreferrer"
+        className="mt-3 inline-flex items-center gap-1 text-blue-700 hover:underline dark:text-blue-300"
+      >
+        Create a free project at Reown Cloud ↗
+      </a>
+      <details className="mt-3">
+        <summary className="cursor-pointer text-neutral-500 hover:text-(--foreground)">
+          Where do I find the Project ID?
+        </summary>
+        <p className="mt-2 text-neutral-500">
+          Sign in to Reown Cloud → <b>Create Project</b> (type: AppKit) → copy
+          the <b>Project ID</b> from the project&apos;s dashboard. It&apos;s a
+          ~32-character hex string.
+        </p>
+      </details>
     </div>
   );
 }
@@ -939,14 +994,18 @@ function NameStatusBadge({ status }: { status: NameStatus }) {
 
 function BridgeScreen({
   number,
+  ghLogin,
   checking,
   warning,
+  namespaces,
   onConfirm,
   onForce,
 }: {
   number: number;
+  ghLogin?: string;
   checking: boolean;
   warning: string | null;
+  namespaces: string[];
   onConfirm: () => void;
   onForce: () => void;
 }) {
@@ -958,6 +1017,22 @@ function BridgeScreen({
         title="Let Vercel see your GitHub"
         hint="Vercel needs to read your forked repo to build it. This is a one-time setup."
       />
+
+      {/* What to do on the external page, before we send them there. */}
+      <ol className="mb-5 space-y-2 rounded-xl border border-black/10 dark:border-white/10 bg-white/50 dark:bg-black/20 p-4 text-sm text-neutral-700 dark:text-neutral-300">
+        <li>
+          <b>1.</b> Open the Vercel GitHub app below (new tab).
+        </li>
+        <li>
+          <b>2.</b> Choose the account{ghLogin ? ` @${ghLogin}` : ""} or org that
+          holds your fork — not a different one.
+        </li>
+        <li>
+          <b>3.</b> Finish the install/configure step, then{" "}
+          <b>come back here</b> and press <b>Check connection</b>.
+        </li>
+      </ol>
+
       <a
         href="https://github.com/apps/vercel/installations/new"
         target="_blank"
@@ -980,6 +1055,7 @@ function BridgeScreen({
           ↗
         </span>
       </a>
+
       <div className="mt-6 flex items-center gap-4">
         <button onClick={onConfirm} disabled={checking} className={ok}>
           {checking ? (
@@ -987,7 +1063,7 @@ function BridgeScreen({
               <Spinner /> Checking…
             </span>
           ) : (
-            <>I&apos;ve installed it →</>
+            <>Check connection →</>
           )}
         </button>
         {warning && (
@@ -999,16 +1075,29 @@ function BridgeScreen({
           </button>
         )}
       </div>
+
       {warning ? (
         <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
           {warning}
+          {namespaces.length > 0 && (
+            <div className="mt-2 text-amber-700/80 dark:text-amber-300/80">
+              Vercel currently sees:{" "}
+              {namespaces.map((n) => (
+                <code
+                  key={n}
+                  className="mx-0.5 rounded bg-black/10 px-1 dark:bg-white/10"
+                >
+                  @{n}
+                </code>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
         opened && (
           <div className="mt-4 text-sm text-neutral-500">
-            Once you&apos;ve installed it on GitHub, come back here and click
-            &ldquo;I&apos;ve installed it&rdquo; — we&apos;ll verify access
-            before continuing.
+            Once you&apos;ve installed it on GitHub, come back here and press{" "}
+            &ldquo;Check connection&rdquo; — we verify access before continuing.
           </div>
         )
       )}
@@ -1163,11 +1252,13 @@ function ReviewScreen({
   forkedRepo,
   chainId,
   token,
+  walletConnectSet,
   vercelUsername,
   ghLogin,
   canLaunch,
   deploying,
   onLaunch,
+  onEditWalletConnect,
   onEditVercel,
   onEditGithub,
 }: {
@@ -1175,11 +1266,13 @@ function ReviewScreen({
   forkedRepo: string;
   chainId: string;
   token: string;
+  walletConnectSet: boolean;
   vercelUsername?: string;
   ghLogin?: string;
   canLaunch: boolean;
   deploying: boolean;
   onLaunch: () => void;
+  onEditWalletConnect: () => void;
   onEditVercel: () => void;
   onEditGithub: () => void;
 }) {
@@ -1195,6 +1288,21 @@ function ReviewScreen({
         <Row label="Chain">{chain?.label ?? chainId}</Row>
         <Row label="Token">
           <code className="text-neutral-700 dark:text-neutral-300">{shortAddr(token)}</code>
+        </Row>
+        <Row label="WalletConnect">
+          {walletConnectSet ? (
+            <span className="text-blue-600 dark:text-blue-400">✓ Configured</span>
+          ) : (
+            <span className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+              ⚠ Wallet actions disabled
+              <button
+                onClick={onEditWalletConnect}
+                className="text-sm text-neutral-500 hover:text-(--foreground)"
+              >
+                add
+              </button>
+            </span>
+          )}
         </Row>
         <Row label="Vercel">
           <span className="flex items-center gap-2">
