@@ -8,6 +8,9 @@ export type Session = {
 export type GhSession = {
   token: string;
   login: string;
+  // Present in GitHub App mode — the user's installation of our App. Used to
+  // mint repo-scoped installation tokens for fork + trigger commit.
+  installationId?: string;
 };
 
 export async function readSession(): Promise<Session | null> {
@@ -29,9 +32,27 @@ export async function readGhSession(): Promise<GhSession | null> {
   const sessionRaw = jar.get("gh_session")?.value;
   if (!token || !sessionRaw) return null;
   try {
-    const session = JSON.parse(sessionRaw) as { login: string };
-    return { token, login: session.login };
+    const session = JSON.parse(sessionRaw) as {
+      login: string;
+      installationId?: string;
+    };
+    return {
+      token,
+      login: session.login,
+      installationId: session.installationId,
+    };
   } catch {
     return null;
   }
+}
+
+// Resolves the token to use for repo operations (fork, commit). In GitHub App
+// mode that's a fresh, repo-scoped installation token; otherwise the user's
+// OAuth token. Imported lazily by routes to avoid a cycle at module load.
+export async function repoToken(session: GhSession): Promise<string> {
+  if (session.installationId) {
+    const { getInstallationToken } = await import("./github-app");
+    return getInstallationToken(session.installationId);
+  }
+  return session.token;
 }

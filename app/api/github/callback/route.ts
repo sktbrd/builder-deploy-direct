@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { exchangeGhCode, getGhUser, GitHubApiError } from "@/lib/github";
+import { appConfigured, findUserInstallationId } from "@/lib/github-app";
 import { verifyState } from "@/lib/oauth-state";
 import { safeNext } from "@/lib/redirect";
 
@@ -9,6 +10,8 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
   const stateParam = url.searchParams.get("state");
+  // GitHub App installs return installation_id on the callback.
+  const installationIdParam = url.searchParams.get("installation_id");
 
   if (!code) {
     return NextResponse.json({ error: "Missing code" }, { status: 400 });
@@ -22,8 +25,13 @@ export async function GET(req: Request) {
   }
   const next = stateCheck.next;
 
-  const clientId = process.env.GITHUB_CLIENT_ID;
-  const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+  const isApp = appConfigured();
+  const clientId = isApp
+    ? process.env.GITHUB_APP_CLIENT_ID
+    : process.env.GITHUB_CLIENT_ID;
+  const clientSecret = isApp
+    ? process.env.GITHUB_APP_CLIENT_SECRET
+    : process.env.GITHUB_CLIENT_SECRET;
   const redirectUri = process.env.GITHUB_REDIRECT_URI;
   if (!clientId || !clientSecret || !redirectUri) {
     return NextResponse.json(
@@ -41,6 +49,15 @@ export async function GET(req: Request) {
     });
     const user = await getGhUser(tok.access_token);
 
+    // In App mode, capture the installation so we can mint scoped tokens later.
+    let installationId: string | undefined;
+    if (isApp) {
+      installationId =
+        installationIdParam ??
+        (await findUserInstallationId(tok.access_token)) ??
+        undefined;
+    }
+
     const res = NextResponse.redirect(new URL(safeNext(next), url.origin));
     const isProd = process.env.NODE_ENV === "production";
     const cookieOpts = {
@@ -53,16 +70,13 @@ export async function GET(req: Request) {
     res.cookies.set("gh_token", tok.access_token, cookieOpts);
     res.cookies.set(
       "gh_session",
-      JSON.stringify({ login: user.login, id: user.id }),
+      JSON.stringify({ login: user.login, id: user.id, installationId }),
       { ...cookieOpts, httpOnly: false },
     );
     return res;
   } catch (e) {
     if (e instanceof GitHubApiError) {
-      return NextResponse.json(
-        { error: e.message },
-        { status: e.status },
-      );
+      return NextResponse.json({ error: e.message }, { status: e.status });
     }
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Unknown error" },

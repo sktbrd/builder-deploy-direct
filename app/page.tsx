@@ -461,6 +461,7 @@ export default function Home() {
               questionNumber={me?.vercel.connected ? 2 : 1}
               question="Now, connect GitHub"
               hint="So we can fork the template into your account."
+              details={<GitHubAccessNote />}
             />
           )}
           {screen === "vercel-bridge" && (
@@ -818,6 +819,7 @@ function ConnectScreen({
   questionNumber,
   question,
   hint,
+  details,
 }: {
   name: string;
   icon: React.ReactNode;
@@ -825,6 +827,7 @@ function ConnectScreen({
   questionNumber: number;
   question: string;
   hint: string;
+  details?: React.ReactNode;
 }) {
   return (
     <div>
@@ -848,6 +851,32 @@ function ConnectScreen({
           →
         </span>
       </a>
+      {details && <div className="mt-5">{details}</div>}
+    </div>
+  );
+}
+
+// Pre-auth explainer (#1): tells the user exactly what GitHub access is for
+// before they leave the app, and that nothing else is touched.
+function GitHubAccessNote() {
+  return (
+    <div className="rounded-xl border border-black/10 dark:border-white/10 bg-white/50 dark:bg-black/20 p-4 text-sm text-neutral-700 dark:text-neutral-300">
+      <div className="mb-2 font-semibold text-neutral-900 dark:text-white">
+        What we do with this access
+      </div>
+      <ul className="space-y-1.5">
+        <li>
+          ✓ <b>Fork</b> the template repo into your account
+        </li>
+        <li>
+          ✓ Push <b>one commit</b> to that fork to kick off the Vercel build
+        </li>
+      </ul>
+      <p className="mt-3 text-neutral-500">
+        That&apos;s it — we never read or write your other repositories, and the
+        token stays in your browser session (nothing is stored server-side). You
+        can revoke access anytime from your GitHub settings.
+      </p>
     </div>
   );
 }
@@ -1517,6 +1546,18 @@ function DoneScreen({
           Deploy another
         </button>
       </div>
+      <p className="mt-6 text-xs text-neutral-500">
+        Done with the deployer?{" "}
+        <a
+          href="https://github.com/settings/installations"
+          target="_blank"
+          rel="noreferrer"
+          className="underline underline-offset-2 hover:text-(--foreground)"
+        >
+          Revoke its GitHub access
+        </a>{" "}
+        anytime — your site keeps running.
+      </p>
     </div>
   );
 }
