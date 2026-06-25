@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { CHAIN_OPTIONS, type EnvKey } from "@/lib/config";
 
@@ -80,6 +80,10 @@ export default function Home() {
   const [deployedProject, setDeployedProject] = useState<string>("");
   const [deployedProjectId, setDeployedProjectId] = useState<string>("");
   const [slowBuild, setSlowBuild] = useState(false);
+  const [deployStage, setDeployStage] = useState<
+    "create" | "trigger" | "build" | null
+  >(null);
+  const [deployBridge, setDeployBridge] = useState(false);
   const [bridgeChecking, setBridgeChecking] = useState(false);
   const [bridgeWarning, setBridgeWarning] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -288,6 +292,8 @@ export default function Home() {
     setDeploying(true);
     setError(null);
     setBridgeHint(null);
+    setDeployStage(null);
+    setDeployBridge(false);
     setScreen("building");
     try {
       if (!forkedRepo) throw new Error("Fork the template first.");
@@ -300,6 +306,11 @@ export default function Home() {
       });
       const data = await res.json();
       if (!res.ok) {
+        // The project may already exist (stage "trigger") — keep its link so
+        // the error screen can still point the user at it.
+        if (data.projectId) setDeployedProjectId(data.projectId);
+        if (data.projectName) setDeployedProject(data.projectName);
+        setDeployStage(data.stage ?? null);
         const msg = (data.error || "").toLowerCase();
         const looksLikeBridge =
           msg.includes("repo") ||
@@ -308,9 +319,8 @@ export default function Home() {
           msg.includes("not found") ||
           data.code === "not_found" ||
           data.code === "forbidden";
-        if (looksLikeBridge && me?.github.login) {
-          setBridgeHint(me.github.login);
-        }
+        setDeployBridge(looksLikeBridge);
+        if (looksLikeBridge && me?.github.login) setBridgeHint(me.github.login);
         throw new Error(data.error || "Deploy failed");
       }
       setDeployedProject(data.projectName);
@@ -327,47 +337,55 @@ export default function Home() {
     }
   };
 
+  // A single status check, reusable by both the interval poller and the manual
+  // "Refresh status" button. Polls by deployment id once known, else by project.
+  const pollOnce = useCallback(async () => {
+    if (!deployedProjectId) return;
+    try {
+      const id = deploymentRef.current?.uid;
+      const res = await fetch("/api/status", {
+        method: "POST",
+        body: JSON.stringify(
+          id ? { deploymentId: id } : { projectId: deployedProjectId },
+        ),
+      });
+      const data = await res.json();
+      if (data.deployment) {
+        setDeployment(data.deployment);
+        const state = data.deployment.readyState;
+        if (state === "READY") setScreen("done");
+        if (state === "ERROR" || state === "CANCELED") {
+          setDeployStage("build");
+          setError(
+            state === "CANCELED"
+              ? "The build was canceled."
+              : "Build failed. Check the inspector for details.",
+          );
+          setScreen("error");
+        }
+      }
+    } catch {
+      // transient network error — keep polling
+    }
+  }, [deployedProjectId]);
+
   useEffect(() => {
     if (previewTarget || screen !== "building" || !deployedProjectId) return;
     let attempts = 0;
     setSlowBuild(false);
-    const poll = async () => {
+    const tick = async () => {
       attempts++;
       // ~30s with no resolution → surface a "taking longer" hint, but keep
       // polling. Webhook-triggered first builds can be slow to appear.
       if (attempts >= 10) setSlowBuild(true);
-      try {
-        const id = deploymentRef.current?.uid;
-        const res = await fetch("/api/status", {
-          method: "POST",
-          body: JSON.stringify(
-            id ? { deploymentId: id } : { projectId: deployedProjectId },
-          ),
-        });
-        const data = await res.json();
-        if (data.deployment) {
-          setDeployment(data.deployment);
-          const state = data.deployment.readyState;
-          if (state === "READY") setScreen("done");
-          if (state === "ERROR" || state === "CANCELED") {
-            setError(
-              state === "CANCELED"
-                ? "The build was canceled."
-                : "Build failed. Check the inspector for details.",
-            );
-            setScreen("error");
-          }
-        }
-      } catch {
-        // transient network error — keep polling
-      }
+      await pollOnce();
     };
-    poll();
-    pollRef.current = setInterval(poll, 3000);
+    tick();
+    pollRef.current = setInterval(tick, 3000);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [screen, deployedProjectId]);
+  }, [screen, deployedProjectId, pollOnce]);
 
   const setEnvField = (k: EnvKey, v: string) =>
     setEnv((s) => ({ ...s, [k]: v }));
@@ -613,7 +631,13 @@ export default function Home() {
             />
           )}
           {screen === "building" && (
-            <BuildingScreen deployment={deployment} slow={slowBuild} />
+            <BuildingScreen
+              deployment={deployment}
+              slow={slowBuild}
+              projectName={deployedProject || projectName}
+              onRefresh={pollOnce}
+              onRecheckBridge={() => setScreen("vercel-bridge")}
+            />
           )}
           {screen === "done" && (
             <DoneScreen
@@ -633,7 +657,16 @@ export default function Home() {
           {screen === "error" && (
             <ErrorScreen
               error={error}
+              stage={deployStage}
               bridgeHint={bridgeHint}
+              bridge={deployBridge}
+              projectName={deployedProject || null}
+              projectId={deployedProjectId || null}
+              repo={forkedRepo || null}
+              onRecheckBridge={() => {
+                setError(null);
+                setScreen("vercel-bridge");
+              }}
               debugUrl={
                 process.env.NODE_ENV === "development" &&
                 projectName &&
@@ -1217,10 +1250,25 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 function BuildingScreen({
   deployment,
   slow,
+  projectName,
+  onRefresh,
+  onRecheckBridge,
 }: {
   deployment: Deployment | null;
   slow: boolean;
+  projectName: string;
+  onRefresh: () => void;
+  onRecheckBridge: () => void;
 }) {
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = async () => {
+    setRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshing(false);
+    }
+  };
   const state = deployment?.readyState ?? "QUEUED";
   const labels: Record<string, string> = {
     QUEUED: "Queued",
@@ -1252,12 +1300,27 @@ function BuildingScreen({
           : "We've kicked off the build on GitHub — waiting for Vercel to pick it up."}
       </p>
       {slow && (
-        <p className="mx-auto mt-3 max-w-md text-sm text-amber-700 dark:text-amber-300">
-          This is taking a little longer than usual. We&apos;re still watching —
-          you can also follow along in your Vercel dashboard.
-        </p>
+        <div className="mx-auto mt-4 max-w-md rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+          Still waiting on Vercel to pick up the build. This is usually just a
+          slow webhook — we&apos;re still watching. If it never starts, Vercel
+          may not have access to your repo;{" "}
+          <button
+            onClick={onRecheckBridge}
+            className="underline underline-offset-2 hover:opacity-80"
+          >
+            re-check the GitHub connection
+          </button>
+          .
+        </div>
       )}
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3 text-sm">
+        <button
+          onClick={refresh}
+          disabled={refreshing}
+          className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:hover:bg-white/10 disabled:opacity-50"
+        >
+          {refreshing ? "Refreshing…" : "Refresh status ↻"}
+        </button>
         {deployment?.inspectorUrl && (
           <a
             href={deployment.inspectorUrl}
@@ -1269,7 +1332,7 @@ function BuildingScreen({
           </a>
         )}
         <a
-          href="https://vercel.com/dashboard/projects"
+          href={`https://vercel.com/dashboard?query=${encodeURIComponent(projectName)}`}
           target="_blank"
           rel="noreferrer"
           className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:hover:bg-white/10"
@@ -1352,40 +1415,119 @@ function DoneScreen({
 
 function ErrorScreen({
   error,
+  stage,
   bridgeHint,
+  bridge,
+  projectName,
+  projectId,
+  repo,
+  onRecheckBridge,
   debugUrl,
   onRetry,
 }: {
   error: string | null;
+  stage: "create" | "trigger" | "build" | null;
   bridgeHint: string | null;
+  bridge: boolean;
+  projectName: string | null;
+  projectId: string | null;
+  repo: string | null;
+  onRecheckBridge: () => void;
   debugUrl: string | null;
   onRetry: () => void;
 }) {
+  const [copied, setCopied] = useState(false);
+  const showBridge = bridge || !!bridgeHint;
+
+  // Per-stage framing so the user knows what actually failed and what survived.
+  const title =
+    stage === "create"
+      ? "Couldn't create the Vercel project"
+      : stage === "trigger"
+        ? "Project created — but the build didn't start"
+        : stage === "build"
+          ? "The build failed"
+          : "Something broke";
+  const subtitle =
+    stage === "trigger"
+      ? "Your project exists on Vercel; we just couldn't push the commit that kicks off the build. Your project link is below."
+      : stage === "build"
+        ? "Vercel started building but the build errored. Check the logs for the cause."
+        : null;
+
+  // Token-safe: none of these values are secrets (tokens live server-side only).
+  const debugBlob = JSON.stringify(
+    { stage, projectName, projectId, repo, error },
+    null,
+    2,
+  );
+  const copyDebug = async () => {
+    try {
+      await navigator.clipboard.writeText(debugBlob);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked — ignore */
+    }
+  };
+
   return (
     <div className="text-center">
       <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-full bg-red-500/15 text-3xl text-red-400">
         ×
       </div>
-      <h2 className="text-3xl font-semibold tracking-tight">Something broke</h2>
+      <h2 className="text-3xl font-semibold tracking-tight">{title}</h2>
+      {subtitle && (
+        <p className="mx-auto mt-3 max-w-md text-base text-neutral-600 dark:text-neutral-400">
+          {subtitle}
+        </p>
+      )}
       <p className="mx-auto mt-3 max-w-md text-base text-red-600 dark:text-red-200">
         {error ?? "Unknown error"}
       </p>
-      {bridgeHint && (
+
+      {showBridge && (
+        <div className="mt-6 flex flex-col items-center gap-3">
+          <a
+            href="https://github.com/apps/vercel/installations/new"
+            target="_blank"
+            rel="noreferrer"
+            className={`${cta} inline-flex`}
+          >
+            Install Vercel on GitHub →
+          </a>
+          <button
+            onClick={onRecheckBridge}
+            className="text-sm text-neutral-500 hover:text-(--foreground)"
+          >
+            Re-check the connection
+          </button>
+        </div>
+      )}
+
+      {projectName && (
         <a
-          href="https://github.com/apps/vercel/installations/new"
+          href={`https://vercel.com/dashboard?query=${encodeURIComponent(projectName)}`}
           target="_blank"
           rel="noreferrer"
-          className={`${cta} mt-6 inline-flex`}
+          className="mt-6 inline-flex items-center gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm text-blue-700 dark:text-blue-300 hover:bg-blue-500/20"
         >
-          Install Vercel on GitHub →
+          Open <code>{projectName}</code> in Vercel ↗
         </a>
       )}
+
       <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-sm">
         <button
           onClick={onRetry}
           className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:hover:bg-white/10"
         >
           ← Try again
+        </button>
+        <button
+          onClick={copyDebug}
+          className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-black/10 dark:hover:bg-white/10"
+        >
+          {copied ? "Copied ✓" : "Copy debug info"}
         </button>
         {debugUrl && (
           <a

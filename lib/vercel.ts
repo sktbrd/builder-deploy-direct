@@ -101,6 +101,17 @@ export type CreateProjectResult = {
   link?: { repo?: string; repoId?: number };
 };
 
+export const getProject = (
+  token: string,
+  idOrName: string,
+  teamId?: string,
+) =>
+  api<CreateProjectResult>(
+    `/v9/projects/${encodeURIComponent(idOrName)}`,
+    token,
+    { teamId },
+  );
+
 export async function createProject(
   token: string,
   config: DeployConfig,
