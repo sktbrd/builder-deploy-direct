@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { forkRepo, getRepo, GitHubApiError } from "@/lib/github";
-import { readGhSession } from "@/lib/session";
+import { readGhSession, repoToken } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -23,20 +23,23 @@ export async function POST(req: Request) {
   const targetFullName = `${session.login}/${targetName}`;
 
   try {
+    // App mode → repo-scoped installation token; OAuth mode → user token.
+    const token = await repoToken(session);
+
     // If the user already forked it, return that directly.
     try {
-      const existing = await getRepo(session.token, targetFullName);
+      const existing = await getRepo(token, targetFullName);
       return NextResponse.json({ repo: existing, alreadyExisted: true });
     } catch (e) {
       if (!(e instanceof GitHubApiError) || e.status !== 404) throw e;
     }
 
-    const repo = await forkRepo(session.token, source, name);
+    const repo = await forkRepo(token, source, name);
     // GitHub fork creation is async — the repo may not be immediately usable.
     // Poll for readiness up to ~10s.
     for (let i = 0; i < 10; i++) {
       try {
-        const ready = await getRepo(session.token, repo.full_name);
+        const ready = await getRepo(token, repo.full_name);
         return NextResponse.json({ repo: ready, alreadyExisted: false });
       } catch {
         await new Promise((r) => setTimeout(r, 1000));

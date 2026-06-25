@@ -9,7 +9,7 @@ A no-code launcher that deploys [sktbrd/builder-template-app](https://github.com
 The whole flow is a single client-side wizard ([`app/page.tsx`](app/page.tsx)) backed by a handful of Next.js API routes. The set of steps is assembled dynamically based on what's already connected.
 
 1. **Connect Vercel** — OAuth via the Vercel integration. `/api/vercel/install` → Vercel → `/api/vercel/callback`. The access token is stored in an **httpOnly** cookie (never reaches client JS); a separate non-httpOnly cookie holds display info (username, team).
-2. **Connect GitHub** — OAuth App flow (`public_repo read:user`). `/api/github/install` → GitHub → `/api/github/callback`. Same cookie split.
+2. **Connect GitHub** — **GitHub App** install when `GITHUB_APP_*` env is set (repo-scoped installation tokens for fork + trigger commit), or an OAuth App (`public_repo read:user`) as fallback. `/api/github/install` → GitHub → `/api/github/callback`. Same cookie split; in App mode the session also carries the installation id.
 3. **Bridge** — the user installs the Vercel GitHub app so Vercel can read their fork. We verify access via `/api/vercel/check-github` before continuing (with a "continue anyway" escape hatch).
 4. **Fork** — `/api/github/fork` calls `POST /repos/{template}/forks` into the user's account, reusing an existing fork if present, polling until GitHub finishes creating it.
 5. **Configure** — project name (debounced availability check), chain, DAO token address, WalletConnect ID, plus optional Alchemy / Pinata / site-URL.
@@ -86,13 +86,13 @@ lib/
 - **OAuth `state` is HMAC-signed** with a TTL. GitHub callbacks require valid state; Vercel callbacks reject an *invalid* state but tolerate a *missing* one (some install flows don't forward it) — so a forged callback is always blocked, but users can't get locked out.
 - **Redirects are same-origin only** (`lib/redirect.ts`) — no open-redirect via `next`.
 - **`/api/debug` is disabled in production** and performs no side effects (it only reads).
-- The GitHub OAuth scope `public_repo` grants write to all of the user's public repos — a known limitation of OAuth Apps. A GitHub App would allow per-repo scoping.
+- **GitHub access is explained before auth** (what we fork + the single trigger commit) and a revoke link is offered after deploy.
+- **GitHub App mode** (when configured) issues repo-scoped installation tokens, so the deployer only touches the selected fork. The **OAuth App fallback** uses `public_repo`, which grants write to all of the user's public repos — set the `GITHUB_APP_*` env to avoid it.
 
 ---
 
 ## Known limitations / future work
 
-- **PAT-free, but broad scope.** Migrating from a GitHub OAuth App to a GitHub App would let users grant access to only the forked repo.
 - **No cancel/rollback UI** during a build (`POST /v12/deployments/{id}/cancel` could power one).
 - **Single template.** The env fields are hard-coded for the Builder template; parsing `sample.env` from the fork would make it generic.
 - **`.vercel-deploy-trigger`** is left in the fork after deploy.

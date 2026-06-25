@@ -7,7 +7,7 @@ import {
   VercelApiError,
 } from "@/lib/vercel";
 import { commitFile, GitHubApiError } from "@/lib/github";
-import { readSession, readGhSession } from "@/lib/session";
+import { readSession, readGhSession, repoToken } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -87,7 +87,7 @@ export async function POST(req: Request) {
   // failure we keep it (and return its id) rather than losing the link.
   try {
     await commitFile(
-      gh.token,
+      await repoToken(gh),
       config.githubRepo,
       ".vercel-deploy-trigger",
       `Triggered at ${new Date().toISOString()}\n`,
