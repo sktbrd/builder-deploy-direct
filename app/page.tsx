@@ -86,6 +86,7 @@ export default function Home() {
   const [deployBridge, setDeployBridge] = useState(false);
   const [bridgeChecking, setBridgeChecking] = useState(false);
   const [bridgeWarning, setBridgeWarning] = useState<string | null>(null);
+  const [bridgeNamespaces, setBridgeNamespaces] = useState<string[]>([]);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Mirror the latest deployment into a ref so the polling interval can read
   // the current deployment id without re-subscribing every tick.
@@ -267,22 +268,33 @@ export default function Home() {
   };
 
   // Verify Vercel actually has access to the user's GitHub before advancing.
-  // If the integration isn't installed yet we warn but still let them force on.
+  // On a clear "not connected" answer we block with a targeted reason; on a
+  // network/permission hiccup we don't hard-block (warn + allow force on).
   const confirmBridge = async () => {
     setBridgeChecking(true);
     setBridgeWarning(null);
+    setBridgeNamespaces([]);
     try {
       const res = await fetch("/api/vercel/check-github");
       const data = await res.json();
-      if (res.ok && data.hasBridge === false) {
+      if (res.ok && data.hasBridge) {
+        setBridgeChecking(false);
+        proceedFromBridge();
+        return;
+      }
+      if (res.ok) {
+        const login = data.ghLogin ?? "your GitHub";
+        setBridgeNamespaces(data.githubNamespaces ?? []);
         setBridgeWarning(
-          `Vercel can't see @${data.ghLogin ?? "your GitHub"} yet. Finish installing the Vercel GitHub app, then click again — or continue anyway.`,
+          data.reason === "no-github"
+            ? `Vercel isn't connected to any GitHub account yet. Install the Vercel GitHub app on @${login} (the account that has your fork), then check again.`
+            : `Vercel is connected to GitHub, but not to @${login}. Install/configure the Vercel GitHub app on the account or org that holds your fork, then check again.`,
         );
         setBridgeChecking(false);
         return;
       }
     } catch {
-      // Network/verification hiccup — don't block the user on it.
+      // Verification itself failed — don't block on it.
     }
     setBridgeChecking(false);
     proceedFromBridge();
@@ -455,8 +467,10 @@ export default function Home() {
           {screen === "vercel-bridge" && (
             <BridgeScreen
               number={qn(flow, "vercel-bridge")}
+              ghLogin={me?.github.login}
               checking={bridgeChecking}
               warning={bridgeWarning}
+              namespaces={bridgeNamespaces}
               onConfirm={confirmBridge}
               onForce={proceedFromBridge}
             />
@@ -939,14 +953,18 @@ function NameStatusBadge({ status }: { status: NameStatus }) {
 
 function BridgeScreen({
   number,
+  ghLogin,
   checking,
   warning,
+  namespaces,
   onConfirm,
   onForce,
 }: {
   number: number;
+  ghLogin?: string;
   checking: boolean;
   warning: string | null;
+  namespaces: string[];
   onConfirm: () => void;
   onForce: () => void;
 }) {
@@ -958,6 +976,22 @@ function BridgeScreen({
         title="Let Vercel see your GitHub"
         hint="Vercel needs to read your forked repo to build it. This is a one-time setup."
       />
+
+      {/* What to do on the external page, before we send them there. */}
+      <ol className="mb-5 space-y-2 rounded-xl border border-black/10 dark:border-white/10 bg-white/50 dark:bg-black/20 p-4 text-sm text-neutral-700 dark:text-neutral-300">
+        <li>
+          <b>1.</b> Open the Vercel GitHub app below (new tab).
+        </li>
+        <li>
+          <b>2.</b> Choose the account{ghLogin ? ` @${ghLogin}` : ""} or org that
+          holds your fork — not a different one.
+        </li>
+        <li>
+          <b>3.</b> Finish the install/configure step, then{" "}
+          <b>come back here</b> and press <b>Check connection</b>.
+        </li>
+      </ol>
+
       <a
         href="https://github.com/apps/vercel/installations/new"
         target="_blank"
@@ -980,6 +1014,7 @@ function BridgeScreen({
           ↗
         </span>
       </a>
+
       <div className="mt-6 flex items-center gap-4">
         <button onClick={onConfirm} disabled={checking} className={ok}>
           {checking ? (
@@ -987,7 +1022,7 @@ function BridgeScreen({
               <Spinner /> Checking…
             </span>
           ) : (
-            <>I&apos;ve installed it →</>
+            <>Check connection →</>
           )}
         </button>
         {warning && (
@@ -999,16 +1034,29 @@ function BridgeScreen({
           </button>
         )}
       </div>
+
       {warning ? (
         <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
           {warning}
+          {namespaces.length > 0 && (
+            <div className="mt-2 text-amber-700/80 dark:text-amber-300/80">
+              Vercel currently sees:{" "}
+              {namespaces.map((n) => (
+                <code
+                  key={n}
+                  className="mx-0.5 rounded bg-black/10 px-1 dark:bg-white/10"
+                >
+                  @{n}
+                </code>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
         opened && (
           <div className="mt-4 text-sm text-neutral-500">
-            Once you&apos;ve installed it on GitHub, come back here and click
-            &ldquo;I&apos;ve installed it&rdquo; — we&apos;ll verify access
-            before continuing.
+            Once you&apos;ve installed it on GitHub, come back here and press{" "}
+            &ldquo;Check connection&rdquo; — we verify access before continuing.
           </div>
         )
       )}
