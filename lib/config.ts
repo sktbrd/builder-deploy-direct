@@ -14,7 +14,7 @@ export type EnvKey = (typeof ENV_KEYS)[number];
 export const CHAIN_OPTIONS = [
   { id: "1", label: "Ethereum Mainnet", network: "mainnet" },
   { id: "8453", label: "Base", network: "mainnet" },
-  { id: "17000", label: "Holesky (testnet)", network: "testnet" },
+  { id: "11155111", label: "Ethereum Sepolia (testnet)", network: "testnet" },
   { id: "84532", label: "Base Sepolia (testnet)", network: "testnet" },
 ] as const;
 

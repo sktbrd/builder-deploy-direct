@@ -87,6 +87,15 @@ export default function Home() {
   const [bridgeChecking, setBridgeChecking] = useState(false);
   const [bridgeWarning, setBridgeWarning] = useState<string | null>(null);
   const [bridgeNamespaces, setBridgeNamespaces] = useState<string[]>([]);
+  const [daoStatus, setDaoStatus] = useState<
+    "idle" | "checking" | "found" | "notfound" | "error"
+  >("idle");
+  const [dao, setDao] = useState<{
+    name: string | null;
+    image: string | null;
+  } | null>(null);
+  const [daoOverride, setDaoOverride] = useState(false);
+  const [daoRetry, setDaoRetry] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Mirror the latest deployment into a ref so the polling interval can read
   // the current deployment id without re-subscribing every tick.
@@ -192,6 +201,48 @@ export default function Home() {
     return () => clearTimeout(t);
   }, [projectName, me?.vercel.connected]);
 
+  // Debounced DAO lookup: resolve name + avatar from the token address on the
+  // selected chain. Gates the token step (must resolve a real Builder DAO).
+  useEffect(() => {
+    const addr = env.NEXT_PUBLIC_DAO_TOKEN_ADDRESS;
+    const chainId = env.NEXT_PUBLIC_CHAIN_ID;
+    setDaoOverride(false);
+    if (validateTokenAddress(addr)) {
+      setDaoStatus("idle");
+      setDao(null);
+      return;
+    }
+    if (previewTarget) {
+      setDao({ name: "Preview DAO", image: null });
+      setDaoStatus("found");
+      return;
+    }
+    setDaoStatus("checking");
+    setDao(null);
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/dao?chainId=${encodeURIComponent(chainId)}&token=${encodeURIComponent(addr)}`,
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          setDaoStatus("error");
+          return;
+        }
+        if (data.found) {
+          setDao({ name: data.name, image: data.image });
+          setDaoStatus("found");
+        } else {
+          setDao(null);
+          setDaoStatus("notfound");
+        }
+      } catch {
+        setDaoStatus("error");
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [env.NEXT_PUBLIC_DAO_TOKEN_ADDRESS, env.NEXT_PUBLIC_CHAIN_ID, daoRetry]);
+
   // Keyboard: Enter advances on most screens (only if current input is valid).
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -202,7 +253,9 @@ export default function Home() {
           welcome: loadingMe,
           fork: !forkedRepo,
           name: !!validateProjectName(projectName) || nameStatus !== "ok",
-          token: !!validateTokenAddress(env.NEXT_PUBLIC_DAO_TOKEN_ADDRESS),
+          token:
+            !!validateTokenAddress(env.NEXT_PUBLIC_DAO_TOKEN_ADDRESS) ||
+            !(daoStatus === "found" || daoOverride),
           // walletconnect is optional (#4) — Enter always advances.
         };
         const advancable = [
@@ -224,7 +277,17 @@ export default function Home() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [screen, flow, projectName, env, nameStatus, loadingMe, forkedRepo]);
+  }, [
+    screen,
+    flow,
+    projectName,
+    env,
+    nameStatus,
+    loadingMe,
+    forkedRepo,
+    daoStatus,
+    daoOverride,
+  ]);
 
   const refreshMe = async () => {
     const res = await fetch("/api/me");
@@ -533,8 +596,23 @@ export default function Home() {
               onChange={(v) => setEnvField("NEXT_PUBLIC_DAO_TOKEN_ADDRESS", v)}
               placeholder="0x…"
               onNext={next}
-              canNext={!validateTokenAddress(env.NEXT_PUBLIC_DAO_TOKEN_ADDRESS)}
+              canNext={
+                !validateTokenAddress(env.NEXT_PUBLIC_DAO_TOKEN_ADDRESS) &&
+                (daoStatus === "found" || daoOverride)
+              }
               error={validateTokenAddress(env.NEXT_PUBLIC_DAO_TOKEN_ADDRESS)}
+              below={
+                !validateTokenAddress(env.NEXT_PUBLIC_DAO_TOKEN_ADDRESS) ? (
+                  <DaoPreview
+                    status={daoStatus}
+                    dao={dao}
+                    chainId={env.NEXT_PUBLIC_CHAIN_ID}
+                    overridden={daoOverride}
+                    onRetry={() => setDaoRetry((n) => n + 1)}
+                    onUseAnyway={() => setDaoOverride(true)}
+                  />
+                ) : null
+              }
             />
           )}
           {screen === "walletconnect" && (
@@ -895,6 +973,7 @@ function InputScreen({
   error,
   statusBadge,
   aside,
+  below,
   skipLabel,
 }: {
   number: number;
@@ -910,6 +989,7 @@ function InputScreen({
   error?: string | null;
   statusBadge?: React.ReactNode;
   aside?: React.ReactNode;
+  below?: React.ReactNode;
   skipLabel?: string;
 }) {
   const ref = useRef<HTMLInputElement>(null);
@@ -948,6 +1028,7 @@ function InputScreen({
       {showError && (
         <div className="mt-2 text-sm text-red-400">{error}</div>
       )}
+      {below && <div className="mt-4">{below}</div>}
       <div className="mt-6 flex items-center gap-4">
         <button onClick={onNext} disabled={disabled} className={ok}>
           OK <span className="opacity-60">↵</span>
@@ -966,6 +1047,100 @@ function InputScreen({
       </div>
     </div>
   );
+}
+
+// Confirms the entered token is a real Builder DAO by showing its avatar +
+// name (resolved from the subgraph). Gates the step until one resolves.
+function DaoPreview({
+  status,
+  dao,
+  chainId,
+  overridden,
+  onRetry,
+  onUseAnyway,
+}: {
+  status: "idle" | "checking" | "found" | "notfound" | "error";
+  dao: { name: string | null; image: string | null } | null;
+  chainId: string;
+  overridden: boolean;
+  onRetry: () => void;
+  onUseAnyway: () => void;
+}) {
+  const [imgOk, setImgOk] = useState(true);
+  const chainLabel =
+    CHAIN_OPTIONS.find((c) => c.id === chainId)?.label ?? `chain ${chainId}`;
+
+  if (status === "checking") {
+    return (
+      <div className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
+        <Spinner /> Looking up DAO…
+      </div>
+    );
+  }
+
+  if (status === "found" && dao) {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-blue-500/30 bg-blue-500/5 px-4 py-3">
+        {dao.image && imgOk ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={dao.image}
+            alt=""
+            onError={() => setImgOk(false)}
+            className="h-10 w-10 flex-shrink-0 rounded-full object-cover"
+          />
+        ) : (
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-sm font-semibold text-blue-700 dark:text-blue-300">
+            {(dao.name ?? "?").slice(0, 1).toUpperCase()}
+          </div>
+        )}
+        <div className="min-w-0">
+          <div className="truncate text-base font-semibold text-neutral-900 dark:text-white">
+            {dao.name ?? "Unnamed DAO"}
+          </div>
+          <div className="text-xs text-blue-600 dark:text-blue-400">
+            ✓ Builder DAO found
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "notfound") {
+    return (
+      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+        No Builder DAO found at this address on <b>{chainLabel}</b>. Double-check
+        the token address and that you picked the right chain.
+      </div>
+    );
+  }
+
+  if (status === "error") {
+    return (
+      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+        Couldn&apos;t verify the DAO right now.
+        <div className="mt-2 flex items-center gap-3">
+          <button
+            onClick={onRetry}
+            className="underline underline-offset-2 hover:opacity-80"
+          >
+            Retry
+          </button>
+          {!overridden && (
+            <button
+              onClick={onUseAnyway}
+              className="underline underline-offset-2 hover:opacity-80"
+            >
+              Use this address anyway
+            </button>
+          )}
+          {overridden && <span className="opacity-80">Using it anyway ✓</span>}
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function WalletConnectHelp() {
