@@ -53,10 +53,17 @@ export default function NogglesRunner() {
   const [best, setBest] = useState(0);
   const [over, setOver] = useState(false);
   const [started, setStarted] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const mutedRef = useRef(false);
+
+  useEffect(() => {
+    mutedRef.current = muted;
+  }, [muted]);
 
   useEffect(() => {
     const stored = Number(localStorage.getItem("noggles-best") || "0");
     if (Number.isFinite(stored)) setBest(stored);
+    setMuted(localStorage.getItem("noggles-muted") === "1");
   }, []);
 
   useEffect(() => {
@@ -71,6 +78,49 @@ export default function NogglesRunner() {
     canvas.width = W * dpr;
     canvas.height = H * dpr;
     ctx.scale(dpr, dpr);
+
+    // Web Audio SFX — synthesized, no assets. Created lazily on the first jump
+    // (a user gesture, which browsers require to start audio).
+    let audio: AudioContext | null = null;
+    const getAudio = (): AudioContext | null => {
+      if (mutedRef.current) return null;
+      if (!audio) {
+        const AC =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext?: typeof AudioContext })
+            .webkitAudioContext;
+        if (!AC) return null;
+        audio = new AC();
+      }
+      if (audio.state === "suspended") void audio.resume();
+      return audio;
+    };
+    const blip = (
+      from: number,
+      to: number,
+      dur: number,
+      type: OscillatorType,
+      vol: number,
+    ) => {
+      const a = getAudio();
+      if (!a) return;
+      const o = a.createOscillator();
+      const g = a.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(from, a.currentTime);
+      o.frequency.exponentialRampToValueAtTime(to, a.currentTime + dur);
+      g.gain.setValueAtTime(vol, a.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + dur);
+      o.connect(g);
+      g.connect(a.destination);
+      o.start();
+      o.stop(a.currentTime + dur);
+    };
+    const playJump = () => blip(320, 620, 0.12, "square", 0.05);
+    const playCoin = () => {
+      blip(880, 1180, 0.08, "sine", 0.06);
+      setTimeout(() => blip(1320, 1680, 0.09, "sine", 0.05), 70);
+    };
 
     const groundY = H - 26;
     const NOG_SCALE = 0.34; // scale the 160×60 logo to sprite size
@@ -109,6 +159,7 @@ export default function NogglesRunner() {
       if (state.onGround) {
         state.vy = JUMP;
         state.onGround = false;
+        playJump();
       }
     };
 
@@ -208,6 +259,7 @@ export default function NogglesRunner() {
           ) {
             c.taken = true;
             state.coins += 1;
+            playCoin();
           }
         }
 
@@ -279,7 +331,18 @@ export default function NogglesRunner() {
         <span>
           {started ? "" : "Press Space / tap to play · "}jump the gas, grab the Ξ
         </span>
-        <span className="tabular-nums">
+        <span className="flex items-center gap-2 tabular-nums">
+          <button
+            onClick={() => {
+              const next = !muted;
+              setMuted(next);
+              localStorage.setItem("noggles-muted", next ? "1" : "0");
+            }}
+            aria-label={muted ? "Unmute" : "Mute"}
+            className="rounded px-1 hover:text-(--foreground)"
+          >
+            {muted ? "🔇" : "🔊"}
+          </button>
           {score} {best > 0 && <span className="opacity-60">· best {best}</span>}
         </span>
       </div>
