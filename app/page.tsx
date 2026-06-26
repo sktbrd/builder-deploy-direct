@@ -8,6 +8,10 @@ const PixelBlast = dynamic(() => import("@/components/PixelBlast"), {
   ssr: false,
 });
 
+const NogglesRunner = dynamic(() => import("@/components/NogglesRunner"), {
+  ssr: false,
+});
+
 type ScreenId =
   | "welcome"
   | "vercel"
@@ -40,7 +44,23 @@ type Deployment = {
   url: string;
   readyState: string;
   inspectorUrl?: string;
+  alias?: string[];
 };
+
+// Vercel's deployment.url is the hashed immutable URL. Prefer the clean
+// production alias (e.g. my-dao-site-nine.vercel.app): a *.vercel.app alias
+// that isn't a -git- branch URL or the long -<team>-projects preview host.
+function bestLiveHost(d: Deployment | null): string | null {
+  if (!d) return null;
+  const aliases = d.alias ?? [];
+  const vercelApp = aliases.filter((a) => a.endsWith(".vercel.app"));
+  const clean = vercelApp
+    .filter((a) => !a.includes("-git-"))
+    .sort((a, b) => a.length - b.length);
+  const best =
+    clean.find((a) => !a.includes("-projects.")) ?? clean[0] ?? d.url ?? null;
+  return best || null;
+}
 
 const INITIAL_ENV: Record<EnvKey, string> = {
   NEXT_PUBLIC_NETWORK_TYPE: "mainnet",
@@ -1674,20 +1694,22 @@ function BuildingScreen({
     : "Starting your deployment…";
   return (
     <div className="text-center">
-      <div className="mx-auto mb-8 flex h-20 w-20 items-center justify-center">
-        <div className="relative h-16 w-16">
-          <div className="absolute inset-0 rounded-full border-4 border-black/10 dark:border-white/10" />
-          <div className="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-blue-400" />
-        </div>
+      <div className="mb-4 flex items-center justify-center gap-3">
+        <span className="relative h-6 w-6">
+          <span className="absolute inset-0 rounded-full border-2 border-black/10 dark:border-white/10" />
+          <span className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-blue-400" />
+        </span>
+        <h2 className="text-2xl font-semibold tracking-tight">{heading}</h2>
       </div>
-      <h2 className="bg-gradient-to-b from-neutral-900 to-neutral-500 dark:from-white bg-clip-text text-3xl font-semibold tracking-tight text-transparent">
-        {heading}
-      </h2>
-      <p className="mt-3 text-base text-neutral-600 dark:text-neutral-400">
+      <p className="mx-auto mb-5 max-w-md text-sm text-neutral-600 dark:text-neutral-400">
         {deployment
-          ? "Your DAO site is being built. This usually takes about 60 seconds."
-          : "We've kicked off the build on GitHub — waiting for Vercel to pick it up."}
+          ? "Your DAO site is building — usually about a minute. Kill time below:"
+          : "We've kicked off the build on GitHub — waiting for Vercel to pick it up. Kill time below:"}
       </p>
+
+      {/* The wait is long; give them a game. */}
+      <NogglesRunner />
+
       {slow && (
         <div className="mx-auto mt-4 max-w-md rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
           Still waiting on Vercel to pick up the build. This is usually just a
@@ -1733,6 +1755,46 @@ function BuildingScreen({
   );
 }
 
+// Browser-framed live screenshot of the deployed site (via thum.io — only the
+// public deploy URL is sent). Fades in on load; hides itself if it can't render.
+function SitePreview({ url, host }: { url: string; host: string }) {
+  const [state, setState] = useState<"loading" | "ok" | "fail">("loading");
+  const shot = `https://image.thum.io/get/width/1000/${url}`;
+  if (state === "fail") return null;
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      className="group mx-auto mt-8 block max-w-md overflow-hidden rounded-xl border border-black/10 bg-white/70 shadow-lg shadow-black/10 dark:border-white/10 dark:bg-black/40"
+    >
+      <div className="flex items-center gap-1.5 border-b border-black/10 bg-black/5 px-3 py-2 dark:border-white/10 dark:bg-white/5">
+        <span className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
+        <span className="h-2.5 w-2.5 rounded-full bg-yellow-400/70" />
+        <span className="h-2.5 w-2.5 rounded-full bg-green-400/70" />
+        <span className="ml-2 truncate text-xs text-neutral-500">{host}</span>
+      </div>
+      <div className="relative aspect-[1000/750] w-full bg-neutral-100 dark:bg-neutral-900">
+        {state === "loading" && (
+          <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-neutral-500">
+            <Spinner /> Capturing preview…
+          </div>
+        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={shot}
+          alt={`Screenshot of ${host}`}
+          onLoad={() => setState("ok")}
+          onError={() => setState("fail")}
+          className={`h-full w-full object-cover object-top transition-opacity duration-500 ${
+            state === "ok" ? "opacity-100" : "opacity-0"
+          }`}
+        />
+      </div>
+    </a>
+  );
+}
+
 function DoneScreen({
   projectName,
   deployment,
@@ -1742,7 +1804,8 @@ function DoneScreen({
   deployment: Deployment | null;
   onReset: () => void;
 }) {
-  const liveUrl = deployment?.url ? `https://${deployment.url}` : null;
+  const liveHost = bestLiveHost(deployment);
+  const liveUrl = liveHost ? `https://${liveHost}` : null;
   return (
     <div className="text-center">
       <div className="relative mx-auto mb-8 h-20 w-20">
@@ -1757,14 +1820,17 @@ function DoneScreen({
       <p className="mt-3 text-base text-neutral-600 dark:text-neutral-400">
         <code className="text-neutral-800 dark:text-neutral-200">{projectName}</code> is deployed.
       </p>
+
+      {liveUrl && <SitePreview url={liveUrl} host={liveHost!} />}
+
       {liveUrl ? (
         <a
           href={liveUrl}
           target="_blank"
           rel="noreferrer"
-          className={`${cta} mt-8 inline-flex`}
+          className={`${cta} mt-6 inline-flex`}
         >
-          Open {deployment?.url} →
+          Open {liveHost} →
         </a>
       ) : (
         <div className="mt-8 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-4 text-base text-neutral-600 dark:text-neutral-400">
