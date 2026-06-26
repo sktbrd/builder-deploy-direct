@@ -219,18 +219,29 @@ export default function NogglesRunner() {
         ctx.fillRect(o.x, groundY - o.h, o.w, o.h);
       }
 
-      // draw coins (Ξ)
+      // draw coins as little ETH diamonds (losangos) — the octahedron logo
       for (const c of state.coinList) {
         if (c.taken) continue;
+        const w = 7;
+        const h = 11;
+        // upper facets (lighter)
+        ctx.fillStyle = "#7c9bff";
+        ctx.beginPath();
+        ctx.moveTo(c.x, c.y - h);
+        ctx.lineTo(c.x + w, c.y);
+        ctx.lineTo(c.x, c.y + 1);
+        ctx.lineTo(c.x - w, c.y);
+        ctx.closePath();
+        ctx.fill();
+        // lower facets (darker)
         ctx.fillStyle = "#3B82F6";
         ctx.beginPath();
-        ctx.arc(c.x, c.y, 9, 0, Math.PI * 2);
+        ctx.moveTo(c.x - w, c.y);
+        ctx.lineTo(c.x, c.y + 1);
+        ctx.lineTo(c.x + w, c.y);
+        ctx.lineTo(c.x, c.y + h);
+        ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "bold 12px ui-sans-serif, system-ui";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("Ξ", c.x, c.y + 0.5);
       }
 
       // draw noggles
