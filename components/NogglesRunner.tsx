@@ -6,42 +6,28 @@ import { useEffect, useRef, useState } from "react";
 // that hops obstacles and collects Ξ. Pure canvas; nothing leaves the client.
 // Lives on the building screen to make the ~minute-long deploy wait fun.
 
-const RED = "#E8341E";
+// Official Nouns noggles outline (from the nouns.wtf nav), drawn in a 160×60
+// coordinate space. Rendered verbatim via Path2D so proportions are exact.
+const NOGGLES_PATH = new Path2D(
+  "M0 50V20h30V0h60v20h10V0h60v60h-60V30H90v30H30V30H10v20z",
+);
+const NOGGLES_W = 160;
+const NOGGLES_H = 60;
+const NOGGLES_RED = "rgb(213, 60, 94)";
+const OBSTACLE = "#4b5563"; // distinct from the player
 
 function drawNoggles(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
-  s: number,
+  scale: number,
 ) {
-  // Lenses are taller than wide, matching the noggles logo proportions.
-  const lensW = 8 * s;
-  const lensH = 11 * s;
-  const t = 2 * s;
-  const gap = 2 * s;
-  const drawLens = (lx: number) => {
-    ctx.fillStyle = RED;
-    ctx.fillRect(lx, y, lensW, lensH);
-    const ix = lx + t;
-    const iy = y + t;
-    const iw = lensW - 2 * t;
-    const ih = lensH - 2 * t;
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(ix, iy, iw / 2, ih);
-    ctx.fillStyle = "#111111";
-    ctx.fillRect(ix + iw / 2, iy, iw / 2, ih);
-  };
-  // left leg (temple) — the ⌐ of ⌐◨-◨: a full-height vertical bar plus a top
-  // connector running right into the first lens.
-  ctx.fillStyle = RED;
-  ctx.fillRect(x - 4 * s, y, 2 * s, lensH); // vertical leg
-  // connector joins the lens low (toward the bottom), not on the top line
-  ctx.fillRect(x - 4 * s, y + lensH - 4 * s, 4 * s, 2 * s);
-  drawLens(x);
-  // bridge between the lenses, around vertical center
-  ctx.fillStyle = RED;
-  ctx.fillRect(x + lensW, y + 4 * s, gap, 3 * s);
-  drawLens(x + lensW + gap);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+  ctx.fillStyle = NOGGLES_RED;
+  ctx.fill(NOGGLES_PATH);
+  ctx.restore();
 }
 
 type Obstacle = { x: number; w: number; h: number };
@@ -73,9 +59,9 @@ export default function NogglesRunner() {
     ctx.scale(dpr, dpr);
 
     const groundY = H - 26;
-    const s = 2.4; // noggles unit
-    const nogW = 18 * s; // lens + bridge + lens span (leg sticks out left, visual only)
-    const nogH = 11 * s; // taller lenses
+    const NOG_SCALE = 0.34; // scale the 160×60 logo to sprite size
+    const nogW = NOGGLES_W * NOG_SCALE;
+    const nogH = NOGGLES_H * NOG_SCALE;
 
     const state = {
       px: 44,
@@ -216,7 +202,7 @@ export default function NogglesRunner() {
       }
 
       // draw obstacles
-      ctx.fillStyle = RED;
+      ctx.fillStyle = OBSTACLE;
       for (const o of state.obstacles) {
         ctx.fillRect(o.x, groundY - o.h, o.w, o.h);
       }
@@ -247,7 +233,7 @@ export default function NogglesRunner() {
       }
 
       // draw noggles
-      drawNoggles(ctx, state.px, state.py, s);
+      drawNoggles(ctx, state.px, state.py, NOG_SCALE);
 
       state.raf = requestAnimationFrame(loop);
     };
