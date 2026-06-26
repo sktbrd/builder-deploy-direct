@@ -35,7 +35,8 @@ function drawNoggles(
   // connector running right into the first lens.
   ctx.fillStyle = RED;
   ctx.fillRect(x - 4 * s, y, 2 * s, lensH); // vertical leg
-  ctx.fillRect(x - 4 * s, y, 4 * s, 2 * s); // top connector to lens
+  // connector joins the lens low (toward the bottom), not on the top line
+  ctx.fillRect(x - 4 * s, y + lensH - 4 * s, 4 * s, 2 * s);
   drawLens(x);
   // bridge between the lenses, around vertical center
   ctx.fillStyle = RED;
