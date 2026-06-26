@@ -14,8 +14,9 @@ function drawNoggles(
   y: number,
   s: number,
 ) {
-  const lensW = 9 * s;
-  const lensH = 7 * s;
+  // Lenses are taller than wide, matching the noggles logo proportions.
+  const lensW = 8 * s;
+  const lensH = 11 * s;
   const t = 2 * s;
   const gap = 2 * s;
   const drawLens = (lx: number) => {
@@ -36,9 +37,9 @@ function drawNoggles(
   ctx.fillRect(x - 4 * s, y, 2 * s, lensH); // vertical leg
   ctx.fillRect(x - 4 * s, y, 4 * s, 2 * s); // top connector to lens
   drawLens(x);
-  // bridge
+  // bridge between the lenses, around vertical center
   ctx.fillStyle = RED;
-  ctx.fillRect(x + lensW, y + 1 * s, gap, 2 * s);
+  ctx.fillRect(x + lensW, y + 4 * s, gap, 3 * s);
   drawLens(x + lensW + gap);
 }
 
@@ -72,8 +73,8 @@ export default function NogglesRunner() {
 
     const groundY = H - 26;
     const s = 2.4; // noggles unit
-    const nogW = 20 * s;
-    const nogH = 7 * s;
+    const nogW = 18 * s; // lens + bridge + lens span (leg sticks out left, visual only)
+    const nogH = 11 * s; // taller lenses
 
     const state = {
       px: 44,
