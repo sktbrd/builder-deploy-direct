@@ -30,9 +30,11 @@ function drawNoggles(
     ctx.fillStyle = "#111111";
     ctx.fillRect(ix + iw / 2, iy, iw / 2, ih);
   };
-  // left nose nub
+  // left leg (temple) — the ⌐ of ⌐◨-◨: a full-height vertical bar plus a top
+  // connector running right into the first lens.
   ctx.fillStyle = RED;
-  ctx.fillRect(x - 2 * s, y + 2 * s, 2 * s, 2 * s);
+  ctx.fillRect(x - 4 * s, y, 2 * s, lensH); // vertical leg
+  ctx.fillRect(x - 4 * s, y, 4 * s, 2 * s); // top connector to lens
   drawLens(x);
   // bridge
   ctx.fillStyle = RED;
