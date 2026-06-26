@@ -189,6 +189,9 @@ export type Deployment = {
     | "ERROR"
     | "CANCELED";
   inspectorUrl?: string;
+  // Assigned aliases (e.g. my-dao-site-nine.vercel.app). Present on v13 reads;
+  // we surface the cleanest one instead of the hashed deployment url.
+  alias?: string[];
 };
 
 export async function latestDeployment(
