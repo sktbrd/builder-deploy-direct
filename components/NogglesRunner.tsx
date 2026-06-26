@@ -27,6 +27,20 @@ function drawNoggles(
   ctx.scale(scale, scale);
   ctx.fillStyle = NOGGLES_RED;
   ctx.fill(NOGGLES_PATH);
+  // White + black pupils inside each lens (lenses span x 30–90 and 100–160).
+  const eye = (lx0: number) => {
+    const x0 = lx0 + 12;
+    const x1 = lx0 + 48;
+    const yt = 12;
+    const yb = 48;
+    const mid = (x0 + x1) / 2;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(x0, yt, mid - x0, yb - yt);
+    ctx.fillStyle = "#1a1a1a";
+    ctx.fillRect(mid, yt, x1 - mid, yb - yt);
+  };
+  eye(30);
+  eye(100);
   ctx.restore();
 }
 
