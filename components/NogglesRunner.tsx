@@ -184,7 +184,7 @@ export default function NogglesRunner() {
           if (rectHit(state.px, state.py, nogW, nogH, o)) {
             state.dead = true;
             state.running = false;
-            const sc = Math.floor(state.dist / 10) + state.coins * 10;
+            const sc = Math.floor(state.dist / 10) + state.coins * 100;
             setScore(sc);
             setOver(true);
             setBest((b) => {
@@ -212,7 +212,7 @@ export default function NogglesRunner() {
         }
 
         if (Math.floor(state.dist) % 4 === 0)
-          setScore(Math.floor(state.dist / 10) + state.coins * 10);
+          setScore(Math.floor(state.dist / 10) + state.coins * 100);
       }
 
       // draw obstacles
